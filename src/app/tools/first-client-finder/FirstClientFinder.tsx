@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "@/lib/usePersistentState";
 import {
   Answers,
@@ -19,8 +19,8 @@ type Stage = "intro" | "quiz" | "results";
 type CardState = {
   /** recipient name input, drives the live template fill */
   name: string;
-  /** has the message been copied at least once */
-  copied: boolean;
+  /** advisor has triggered at least one send action (text/instagram/copy) */
+  interacted: boolean;
   /** has the advisor marked this contact as sent */
   sent: boolean;
   /** is the follow-up section expanded */
@@ -32,9 +32,17 @@ type SavedSession = {
   cards: Record<string, CardState>;
 };
 
-const STORAGE_KEY = "fora.first-client-finder.v1";
+// v2: CardState.copied → CardState.interacted (persists once true).
+const STORAGE_KEY = "fora.first-client-finder.v2";
 
 const emptySession: SavedSession = { answers: null, cards: {} };
+
+const EMPTY_CARD: CardState = {
+  name: "",
+  interacted: false,
+  sent: false,
+  followUpOpen: false,
+};
 
 export default function FirstClientFinder() {
   const [session, setSession, hydrated] = usePersistentState<SavedSession>(
@@ -106,9 +114,7 @@ export default function FirstClientFinder() {
       cards={session.cards}
       onCardChange={(id, updater) =>
         setSession((prev) => {
-          const current: CardState =
-            prev.cards[id] ??
-            { name: "", copied: false, sent: false, followUpOpen: false };
+          const current: CardState = prev.cards[id] ?? EMPTY_CARD;
           return {
             ...prev,
             cards: { ...prev.cards, [id]: updater(current) },
@@ -305,6 +311,39 @@ function Results({
   const sentCount = archetypes.filter((a) => cards[a.id]?.sent).length;
   const allSent = sentCount === archetypes.length;
 
+  // Only one card may be expanded at a time. Tapping another collapses
+  // the current; tapping the dim backdrop also collapses.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Lightweight toast (used by the Instagram action).
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // ESC closes the expanded card.
+  useEffect(() => {
+    if (!expandedId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpandedId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expandedId]);
+
+  // Lock body scroll while the modal is open (no double scrollbar, no
+  // background drift on iOS).
+  useEffect(() => {
+    if (!expandedId) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [expandedId]);
+
   return (
     <section className="animate-fadeUp">
       <p className="eyebrow">Your starter list</p>
@@ -316,26 +355,37 @@ function Results({
         <span className="italic">Today.</span>
       </h1>
       <p className="mt-5 max-w-md text-base leading-relaxed text-ink/75">
-        Each card represents a different kind of contact in your network. Fill
-        in a name, copy the message, and reach out.
+        Each card represents a different kind of contact in your network. Tap
+        a card to personalize and send the message.
       </p>
 
       <div className="mt-10 rule" />
+
+      {/* Dim + blur backdrop while a card is expanded. The heavy
+          backdrop-blur + opaque-ish ink wash hides the page so the
+          centered modal is unambiguously in focus. */}
+      {expandedId && (
+        <button
+          type="button"
+          aria-label="Close expanded card"
+          onClick={() => setExpandedId(null)}
+          className="fixed inset-0 z-40 cursor-default bg-ink/70 backdrop-blur-md transition-opacity animate-fadeUp"
+        />
+      )}
 
       <ul className="mt-2 divide-y divide-ink/10">
         {archetypes.map((a) => (
           <ClientCard
             key={a.id}
             archetype={a}
-            state={
-              cards[a.id] ?? {
-                name: "",
-                copied: false,
-                sent: false,
-                followUpOpen: false,
-              }
-            }
+            state={cards[a.id] ?? EMPTY_CARD}
             onChange={(updater) => onCardChange(a.id, updater)}
+            isExpanded={expandedId === a.id}
+            onToggleExpand={() =>
+              setExpandedId((prev) => (prev === a.id ? null : a.id))
+            }
+            onCollapse={() => setExpandedId(null)}
+            onToast={setToast}
           />
         ))}
       </ul>
@@ -351,6 +401,8 @@ function Results({
           Start over
         </button>
       </div>
+
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </section>
   );
 }
@@ -359,152 +411,436 @@ function Results({
 // Card
 // ----------------------------------------------------------------------------
 
-const TIE_LABELS: Record<string, { label: string; color: string }> = {
-  close: { label: "Close tie", color: "border-ink/30 text-ink" },
-  weak: { label: "Weak tie", color: "border-coral/60 text-coral" },
-  broadcast: { label: "Broadcast", color: "border-taupe/60 text-taupe" },
+const TIE_META: Record<
+  string,
+  { label: string; color: string; icon: string }
+> = {
+  close: { label: "Close tie", color: "border-ink/30 text-ink", icon: "⭐" },
+  weak: { label: "Weak tie", color: "border-coral/60 text-coral", icon: "💬" },
+  broadcast: {
+    label: "Broadcast",
+    color: "border-taupe/60 text-taupe",
+    icon: "📢",
+  },
 };
+
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    // Fallback for older browsers / non-secure contexts.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand("copy");
+    } catch {
+      // Give up silently.
+    }
+    document.body.removeChild(ta);
+  }
+}
 
 function ClientCard({
   archetype,
   state,
   onChange,
+  isExpanded,
+  onToggleExpand,
+  onCollapse,
+  onToast,
 }: {
   archetype: ReturnType<typeof recommend>[number];
   state: CardState;
   onChange: (updater: (prev: CardState) => CardState) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onCollapse: () => void;
+  onToast: (msg: string) => void;
 }) {
   const filled = fillMessage(archetype.message, state.name);
-  const tie = TIE_LABELS[archetype.tie];
+  const tie = TIE_META[archetype.tie];
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(filled);
-    } catch {
-      // Fallback: select text via a hidden textarea.
-      const ta = document.createElement("textarea");
-      ta.value = filled;
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-      } catch {
-        // Give up silently.
+  // Templates without a {{name}} placeholder are broadcast posts — the
+  // recipient name input is irrelevant and only adds noise.
+  const usesName = archetype.message.includes("{{name}}");
+
+  // Transient "Copied ✓" flash on the message preview when tapped.
+  const [justCopied, setJustCopied] = useState(false);
+
+  // Web Share API (`navigator.share`) opens the OS native share sheet with
+  // the message pre-populated — same UX as sharing a video. Only render
+  // the button when the API is actually available so we don't show a dead
+  // affordance on desktop browsers without it.
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => {
+    setCanShare(
+      typeof navigator !== "undefined" && typeof navigator.share === "function",
+    );
+  }, []);
+
+  function markInteracted() {
+    onChange((p) => (p.interacted ? p : { ...p, interacted: true }));
+  }
+
+  async function handleCopyMessage() {
+    await copyToClipboard(filled);
+    markInteracted();
+    setJustCopied(true);
+    setTimeout(() => setJustCopied(false), 2000);
+  }
+
+  async function handleText() {
+    await copyToClipboard(filled);
+    markInteracted();
+    // sms: scheme is the universal native-SMS handoff. Body must be encoded.
+    window.location.href = `sms:?body=${encodeURIComponent(filled)}`;
+  }
+
+  async function handleEmail() {
+    await copyToClipboard(filled);
+    markInteracted();
+    const subject = "Quick update from me";
+    window.location.href = `mailto:?subject=${encodeURIComponent(
+      subject,
+    )}&body=${encodeURIComponent(filled)}`;
+  }
+
+  async function handleInstagram() {
+    await copyToClipboard(filled);
+    markInteracted();
+    onToast(
+      "Message copied — paste it in your DM when Instagram opens",
+    );
+    // Try the native app first; fall back to web after a short delay so the
+    // toast remains visible if the protocol handler isn't registered.
+    const webFallback = "https://www.instagram.com/direct/inbox/";
+    const appUrl = "instagram://direct-inbox";
+    const start = Date.now();
+    const opened = window.open(appUrl, "_blank");
+    setTimeout(() => {
+      if (Date.now() - start < 1500) {
+        if (opened) opened.location.href = webFallback;
+        else window.open(webFallback, "_blank");
       }
-      document.body.removeChild(ta);
+    }, 700);
+  }
+
+  async function handleShare() {
+    markInteracted();
+    try {
+      await navigator.share({ text: filled });
+    } catch {
+      // User cancelled or share failed — silently no-op. Clipboard is the
+      // dedicated copy affordance, so we don't auto-copy here.
     }
-    onChange((p) => ({ ...p, copied: true }));
-    setTimeout(() => onChange((p) => ({ ...p, copied: false })), 2000);
   }
 
   return (
-    <li
-      className={`relative py-8 transition ${
-        state.sent ? "opacity-95" : ""
-      }`}
-    >
-      {/* Sent overlay checkmark */}
-      {state.sent && (
-        <span
-          aria-hidden
-          className="absolute right-0 top-7 flex h-8 w-8 animate-pop items-center justify-center rounded-full bg-ink text-cream"
-        >
-          <svg
-            viewBox="0 0 20 20"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M4 10.5l4 4 8-9" />
-          </svg>
-        </span>
-      )}
-
-      <span
-        className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${tie.color}`}
+    <>
+      <li
+        className={`relative py-8 transition ${
+          state.sent ? "opacity-95" : ""
+        }`}
       >
-        {tie.label}
-      </span>
-
-      <h3 className="mt-3 pr-12 font-display text-2xl font-normal leading-tight tracking-tightish text-ink sm:text-3xl">
-        {archetype.name}
-      </h3>
-      <p className="mt-2 font-display text-base italic leading-snug text-ink/70 sm:text-lg">
-        {archetype.why}
-      </p>
-
-      {/* Why this person? — editorial pull-quote style */}
-      <p className="mt-4 border-l border-ink/30 pl-4 text-sm leading-relaxed text-ink/75">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
-          Why this person:{" "}
-        </span>
-        {archetype.rationale}
-      </p>
-
-      {/* Recipient name input */}
-      <label className="mt-6 block">
-        <span className="eyebrow">Who are you sending this to?</span>
-        <input
-          type="text"
-          value={state.name}
-          onChange={(e) =>
-            onChange((p) => ({ ...p, name: e.target.value }))
-          }
-          placeholder="First name"
-          className="input-editorial mt-3"
-        />
-      </label>
-
-      {/* Message preview */}
-      <div className="mt-4 border border-dashed border-ink/25 bg-creamDeep/40 p-4 font-display text-base leading-relaxed text-ink sm:text-lg">
-        {filled}
-      </div>
-
-      {/* Actions */}
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-        <button
-          type="button"
-          onClick={copy}
-          className={`flex-1 ${state.copied ? "btn-taupe" : "btn-outline"}`}
-        >
-          {state.copied ? "Copied ✓" : "Copy message"}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            onChange((p) => ({ ...p, sent: !p.sent }))
-          }
-          className={`flex-1 ${state.sent ? "btn-outline" : "btn-primary"}`}
-        >
-          {state.sent ? "Sent (undo)" : "Mark as sent"}
-        </button>
-      </div>
-
-      {/* Follow-up disclosure */}
-      <div className="mt-6 border-t border-ink/10 pt-4">
-        <button
-          type="button"
-          onClick={() =>
-            onChange((p) => ({ ...p, followUpOpen: !p.followUpOpen }))
-          }
-          className="flex w-full items-center justify-between text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/70 transition hover:text-ink"
-          aria-expanded={state.followUpOpen}
-        >
-          <span>What to say if they reply</span>
-          <span aria-hidden className="font-display text-xl normal-case tracking-tightish text-ink/50">
-            {state.followUpOpen ? "−" : "+"}
+        {/* Sent overlay checkmark */}
+        {state.sent && (
+          <span
+            aria-hidden
+            className="absolute right-0 top-7 flex h-8 w-8 animate-pop items-center justify-center rounded-full bg-ink text-cream"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 10.5l4 4 8-9" />
+            </svg>
           </span>
-        </button>
-        {state.followUpOpen && (
-          <p className="mt-3 font-display text-base italic leading-relaxed text-ink/80">
-            {archetype.followUp}
-          </p>
         )}
-      </div>
-    </li>
+
+        {/* Tie badge with icon */}
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${tie.color}`}
+        >
+          <span aria-hidden>{tie.icon}</span>
+          {tie.label}
+        </span>
+
+        <h3 className="mt-3 pr-12 font-display text-2xl font-normal leading-tight tracking-tightish text-ink sm:text-3xl">
+          {archetype.name}
+        </h3>
+        <p className="mt-2 font-display text-base italic leading-snug text-ink/70 sm:text-lg">
+          {archetype.why}
+        </p>
+
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            className="btn-reach"
+            aria-expanded={isExpanded}
+            aria-controls={`card-modal-${archetype.id}`}
+          >
+            {state.sent ? "Edit message" : "Reach out"}{" "}
+            <span aria-hidden>→</span>
+          </button>
+        </div>
+      </li>
+
+      {/* Centered modal — fixed, scroll-locked, dismissible via X / Esc /
+          backdrop click. The outer wrapper handles vertical centering and
+          internal scroll if the body overflows. */}
+      {isExpanded && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`card-modal-title-${archetype.id}`}
+          id={`card-modal-${archetype.id}`}
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6"
+          onClick={(e) => {
+            // Click on the padding area (outside the panel) closes.
+            if (e.target === e.currentTarget) onCollapse();
+          }}
+        >
+          <div className="relative w-full max-w-lg animate-fadeUp rounded-cta bg-cream p-6 shadow-2xl ring-1 ring-ink/10 sm:p-8">
+            {/* Close X — top right */}
+            <button
+              type="button"
+              onClick={onCollapse}
+              aria-label="Close"
+              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-ink/60 transition hover:bg-ink/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+            >
+              <svg
+                viewBox="0 0 20 20"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M5 5l10 10M15 5L5 15" />
+              </svg>
+            </button>
+
+            {/* Modal header — repeats badge + title for context */}
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${tie.color}`}
+            >
+              <span aria-hidden>{tie.icon}</span>
+              {tie.label}
+            </span>
+            <h3
+              id={`card-modal-title-${archetype.id}`}
+              className="mt-3 pr-10 font-display text-2xl font-normal leading-tight tracking-tightish text-ink sm:text-3xl"
+            >
+              {archetype.name}
+            </h3>
+            <p className="mt-2 font-display text-base italic leading-snug text-ink/70 sm:text-lg">
+              {archetype.why}
+            </p>
+
+            <div className="mt-5">
+              {/* Why this person? — editorial pull-quote style */}
+              <p className="border-l border-ink/30 pl-4 text-sm leading-relaxed text-ink/75">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+                  Why this person:{" "}
+                </span>
+                {archetype.rationale}
+              </p>
+
+              {/* Recipient name input — only shown for templates that
+                  actually use {{name}}. Broadcast templates skip this. */}
+              {usesName && (
+                <label className="mt-6 block">
+                  <span className="eyebrow">Who are you sending this to?</span>
+                  <input
+                    type="text"
+                    value={state.name}
+                    onChange={(e) =>
+                      onChange((p) => ({ ...p, name: e.target.value }))
+                    }
+                    placeholder="First name"
+                    className="input-editorial mt-3"
+                    autoFocus
+                  />
+                </label>
+              )}
+
+              {/* Message preview — click anywhere on it to copy. The
+                  whole block is the copy target now (no separate Copy
+                  button), with a hover hint and a transient "Copied ✓"
+                  badge in the corner. */}
+              <div className={usesName ? "mt-4" : "mt-6"}>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="eyebrow">Message</p>
+                  <span
+                    aria-hidden
+                    className={`text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+                      justCopied ? "text-coral" : "text-ink/45"
+                    }`}
+                  >
+                    {justCopied ? "Copied ✓" : "Tap to copy"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyMessage}
+                  aria-label="Copy message to clipboard"
+                  className={`group relative block w-full border border-dashed p-4 text-left font-display text-base leading-relaxed text-ink transition sm:text-lg ${
+                    justCopied
+                      ? "border-coral bg-coral/10"
+                      : "border-ink/25 bg-creamDeep/40 hover:border-ink/60 hover:bg-creamDeep/70"
+                  }`}
+                >
+                  {filled}
+                </button>
+              </div>
+
+              {/* Send options row */}
+              <div className="mt-5">
+                <p className="eyebrow mb-2">Send via</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleText}
+                    className="btn-send"
+                    aria-label="Open native SMS with message pre-filled"
+                  >
+                    <span aria-hidden className="text-base">📱</span> Text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEmail}
+                    className="btn-send"
+                    aria-label="Open email client with message pre-filled"
+                  >
+                    <span aria-hidden className="text-base">✉️</span> Email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleInstagram}
+                    className="btn-send"
+                    aria-label="Copy message and open Instagram"
+                  >
+                    <span aria-hidden className="text-base">📸</span> Instagram
+                  </button>
+                  {canShare && (
+                    <button
+                      type="button"
+                      onClick={handleShare}
+                      className="btn-send"
+                      aria-label="Open the system share sheet with the message pre-filled"
+                    >
+                      <span aria-hidden className="text-base">↗</span> Share
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Mark-as-sent */}
+              <div className="mt-6">
+                {state.interacted ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChange((p) => ({ ...p, sent: !p.sent }))
+                      }
+                      className={`w-full ${
+                        state.sent ? "btn-outline" : "btn-primary"
+                      }`}
+                    >
+                      {state.sent ? "Sent (undo)" : "Mark as sent"}
+                    </button>
+                    <p className="mt-2 text-center text-xs leading-relaxed text-ink/60">
+                      Let us know you sent it so we can track your progress.
+                    </p>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChange((p) => ({ ...p, sent: !p.sent }))
+                    }
+                    className="w-full btn-outline"
+                  >
+                    {state.sent ? "Sent (undo)" : "Mark as sent"}
+                  </button>
+                )}
+              </div>
+
+              {/* Follow-up disclosure */}
+              <div className="mt-6 border-t border-ink/10 pt-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange((p) => ({ ...p, followUpOpen: !p.followUpOpen }))
+                  }
+                  className="flex w-full items-center justify-between text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/70 transition hover:text-ink"
+                  aria-expanded={state.followUpOpen}
+                >
+                  <span>What to say if they reply</span>
+                  <span
+                    aria-hidden
+                    className="font-display text-xl normal-case tracking-tightish text-ink/50"
+                  >
+                    {state.followUpOpen ? "−" : "+"}
+                  </span>
+                </button>
+                {state.followUpOpen && (
+                  <p className="mt-3 font-display text-base italic leading-relaxed text-ink/80">
+                    {archetype.followUp}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Toast
+// ----------------------------------------------------------------------------
+
+function Toast({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-x-4 bottom-6 z-50 mx-auto flex max-w-sm items-start gap-3 rounded-cta border border-ink/15 bg-ink px-4 py-3 text-sm leading-snug text-cream shadow-lg animate-fadeUp"
+    >
+      <span aria-hidden className="mt-0.5">📋</span>
+      <p className="flex-1">{message}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss notification"
+        className="text-cream/70 transition hover:text-cream"
+      >
+        ×
+      </button>
+    </div>
   );
 }
 

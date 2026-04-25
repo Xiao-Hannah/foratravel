@@ -55,4 +55,20 @@
   .rule {
     @apply h-px w-full bg-ink/15;
   }
+
+  /* Outlined "send option" button — secondary to the message body.
+     Equal-sized, icon + label, Fora coral highlight on hover/active. */
+  .btn-send {
+    @apply inline-flex flex-1 items-center justify-center gap-2 rounded-cta border border-ink/40
+           bg-cream px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink
+           transition hover:border-coral hover:bg-coral/10 hover:text-coral
+           active:scale-[0.99] focus:outline-none focus-visible:border-coral
+           focus-visible:ring-2 focus-visible:ring-coral/40;
+  }
+
+  /* Compact ghost CTA used for the collapsed "Reach out →" affordance. */
+  .btn-reach {
+    @apply inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase
+           tracking-[0.16em] text-ink transition hover:text-coral;
+  }
 }
