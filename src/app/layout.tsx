@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Newsreader } from "next/font/google";
 import "./globals.css";
+import { ResetDemoButton } from "./ResetDemoButton";
 
 // Newsreader is a clean editorial serif — closer to Fora's Chiswick display
 // face than Fraunces, and without the funky stylistic alternates.
@@ -36,7 +37,7 @@ export default function RootLayout({
 
 function SiteHeader() {
   return (
-    <header className="sticky top-3 z-30 mx-3 mt-3 rounded-2xl border border-ink/10 bg-cream/90 px-5 py-3 backdrop-blur sm:mx-6 sm:px-7">
+    <header className="sticky top-0 z-30 border-b border-ink/10 bg-cream/90 px-5 py-3 backdrop-blur sm:px-7">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
         <Link
           href="/"
@@ -83,7 +84,10 @@ function SiteFooter() {
         <span className="font-display text-base normal-case tracking-tightish text-ink/80">
           Fora Tools
         </span>
-        <span>Demo project for Fora Travel · 2026</span>
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
+          <ResetDemoButton />
+          <span>Demo project for Fora Travel · 2026</span>
+        </div>
       </div>
     </footer>
   );
