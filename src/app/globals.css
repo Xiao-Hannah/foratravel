@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    background-color: #fefaf5;
+    color: #131313;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "kern";
+  }
+
+  /* Display font tuning. */
+  .font-display {
+    font-feature-settings: "kern", "liga";
+  }
+}
+
+@layer components {
+  /* Eyebrow label used above section headings. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60;
+  }
+
+  /* Primary CTA — solid dark, matches Fora's APPLY button. */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-cta bg-ink px-6 py-3.5
+           text-sm font-medium uppercase tracking-[0.12em] text-cream
+           transition hover:bg-black active:scale-[0.99] disabled:opacity-50;
+  }
+
+  /* Secondary CTA — taupe, matches Fora's "GET MY APPLICATION" button. */
+  .btn-taupe {
+    @apply inline-flex items-center justify-center gap-2 rounded-cta bg-taupe px-6 py-3.5
+           text-sm font-medium uppercase tracking-[0.12em] text-cream
+           transition hover:bg-taupeDark active:scale-[0.99];
+  }
+
+  /* Outline / secondary action. */
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-cta border border-ink/80
+           bg-transparent px-6 py-3.5 text-sm font-medium uppercase tracking-[0.12em] text-ink
+           transition hover:bg-ink hover:text-cream active:scale-[0.99];
+  }
+
+  /* Square editorial input, uppercase placeholder. */
+  .input-editorial {
+    @apply w-full border border-ink/70 bg-transparent px-5 py-4 text-sm text-ink
+           placeholder:text-ink/50 placeholder:uppercase placeholder:tracking-[0.14em]
+           focus:border-ink focus:outline-none focus:ring-0;
+  }
+
+  /* Hairline section divider. */
+  .rule {
+    @apply h-px w-full bg-ink/15;
+  }
+}
