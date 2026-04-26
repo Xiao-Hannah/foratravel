@@ -19,7 +19,12 @@ export type SavedSession = {
 };
 
 // v2: CardState.copied → CardState.interacted (persists once true).
-export const STORAGE_KEY = "fora.first-client-finder.v2";
+// v3: Answers gained `tenure` and `workStyle` fields — old v2 sessions are
+//     not compatible (would fail the recommendation logic), so we change the
+//     key rather than try to migrate.
+// v4: Quiz reshaped — `tenure` and `workStyle` removed, `outreachStyle` added,
+//     `background` expanded. v3 saves would crash the recommender, so bump.
+export const STORAGE_KEY = "fora.first-client-finder.v4";
 
 export const emptySession: SavedSession = { answers: null, cards: {} };
 

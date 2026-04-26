@@ -109,6 +109,90 @@ export default function Results({
 
       <Tracker count={sentCount} total={archetypes.length} allSent={allSent} />
 
+      {/* Secondary path: presence-building options for advisors who aren't
+          ready to send a direct outreach yet. Visually softer than the main
+          cards above (white surfaces on cream, smaller type). */}
+      <section
+        aria-labelledby="warmup-heading"
+        className="mt-14 border-t border-ink/15 pt-10"
+      >
+        <p className="eyebrow">Or, ease in</p>
+        <h2
+          id="warmup-heading"
+          className="mt-3 font-display text-2xl font-normal leading-snug tracking-tightish text-ink sm:text-3xl"
+        >
+          Not ready to reach out yet?
+        </h2>
+        <p className="mt-2 text-base leading-relaxed text-ink/70">
+          Build your presence while you warm up.
+        </p>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <Link
+            href="/first-client-finder/destination-guide"
+            className="group flex flex-col border border-ink/15 bg-white p-5 transition hover:border-ink/40"
+          >
+            <span aria-hidden className="text-2xl">
+              📝
+            </span>
+            <h3 className="mt-3 font-display text-lg leading-snug tracking-tightish text-ink">
+              Write a destination guide
+            </h3>
+            <p className="mt-2 flex-1 text-sm leading-relaxed text-ink/70">
+              Publish on Fora&rsquo;s platform and show up when clients search
+              for travel inspiration.
+            </p>
+            <span className="mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-brown transition group-hover:text-brownHover">
+              Open the guide walkthrough →
+            </span>
+          </Link>
+
+          <Link
+            href="/first-client-finder/hotel-review"
+            className="group flex flex-col border border-ink/15 bg-white p-5 transition hover:border-ink/40"
+          >
+            <span aria-hidden className="text-2xl">
+              📸
+            </span>
+            <h3 className="mt-3 font-display text-lg leading-snug tracking-tightish text-ink">
+              Post a hotel review
+            </h3>
+            <p className="mt-2 flex-1 text-sm leading-relaxed text-ink/70">
+              Share your honest take on a stay. Your network will start seeing
+              you as the person to ask about travel.
+            </p>
+            <span className="mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-brown transition group-hover:text-brownHover">
+              Open the review walkthrough →
+            </span>
+          </Link>
+        </div>
+
+        {/* Forum item — a third option below the two cards, intentionally
+            styled as a row, not a third card. */}
+        <a
+          href="https://advisor.fora.travel/forum"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group mt-4 flex items-start gap-3 border border-ink/15 bg-white px-5 py-4 transition hover:border-ink/40"
+        >
+          <span aria-hidden className="text-xl">
+            💬
+          </span>
+          <span className="flex-1 text-sm leading-relaxed text-ink/80">
+            Not sure where to start? Advisors in Forum share what worked for
+            their first client.
+          </span>
+          <span className="shrink-0 self-center text-[11px] font-semibold uppercase tracking-[0.16em] text-brown transition group-hover:text-brownHover">
+            Visit Forum →
+          </span>
+        </a>
+
+        <p className="mt-4 text-xs leading-relaxed text-ink/55">
+          Content builds long-term visibility. Direct outreach gets your first
+          booking faster.
+        </p>
+      </section>
+
       {/* Outreach log CTA — link to the persistent tracker. Only render once
           there is something to look at, so empty states don't clutter. */}
       {log.length > 0 && (

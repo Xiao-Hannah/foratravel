@@ -9,10 +9,20 @@ const TIE_META: Record<
   string,
   { label: string; color: string; icon: string }
 > = {
-  close: { label: "Close tie", color: "border-ink/30 text-ink", icon: "⭐" },
-  weak: { label: "Weak tie", color: "border-coral/60 text-coral", icon: "💬" },
+  // Friendlier, plain-English labels. The internal keys (close/weak/broadcast)
+  // are kept so the recommendation logic stays unchanged.
+  close: {
+    label: "People close to you",
+    color: "border-ink/30 text-ink",
+    icon: "⭐",
+  },
+  weak: {
+    label: "People in your wider circle",
+    color: "border-taupe/60 text-taupe",
+    icon: "💬",
+  },
   broadcast: {
-    label: "Broadcast",
+    label: "Your broader audience",
     color: "border-taupe/60 text-taupe",
     icon: "📢",
   },
@@ -107,9 +117,21 @@ export default function ClientCard({
     await copyToClipboard(filled);
     markInteracted();
     const subject = "Quick update from me";
-    window.location.href = `mailto:?subject=${encodeURIComponent(
+    // Use a temporary anchor click instead of `window.location.href = mailto:`.
+    // Some browsers (notably mobile Safari and certain in-app webviews) will
+    // either ignore the assignment or navigate the page away from the tool.
+    // A click on a same-tab anchor reliably hands the URL to the OS protocol
+    // handler, which opens the native mail composer with the body pre-filled.
+    const href = `mailto:?subject=${encodeURIComponent(
       subject,
     )}&body=${encodeURIComponent(filled)}`;
+    const a = document.createElement("a");
+    a.href = href;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   async function handleInstagram() {
@@ -379,29 +401,14 @@ export default function ClientCard({
                 )}
               </div>
 
-              {/* Follow-up disclosure */}
+              {/* Sidekick reply helper — replaces the static "what to say
+                  if they reply" disclosure. The advisor pastes whatever the
+                  client wrote and gets a tailored reply suggestion. */}
               <div className="mt-6 border-t border-ink/10 pt-4">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onChange((p) => ({ ...p, followUpOpen: !p.followUpOpen }))
-                  }
-                  className="flex w-full items-center justify-between text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/70 transition hover:text-ink"
-                  aria-expanded={state.followUpOpen}
-                >
-                  <span>What to say if they reply</span>
-                  <span
-                    aria-hidden
-                    className="font-display text-xl normal-case tracking-tightish text-ink/50"
-                  >
-                    {state.followUpOpen ? "−" : "+"}
-                  </span>
-                </button>
-                {state.followUpOpen && (
-                  <p className="mt-3 font-display text-base italic leading-relaxed text-ink/80">
-                    {archetype.followUp}
-                  </p>
-                )}
+                <SidekickReplyHelper
+                  fallback={archetype.followUp}
+                  archetypeName={archetype.name}
+                />
               </div>
             </div>
           </div>
@@ -409,4 +416,172 @@ export default function ClientCard({
       )}
     </>
   );
+}
+
+// ----------------------------------------------------------------------------
+// SidekickReplyHelper
+// ----------------------------------------------------------------------------
+//
+// Lightweight stand-in for a real Sidekick API. The advisor pastes what the
+// client wrote, we show the prompt that would be sent to Sidekick, simulate
+// thinking with a short delay, then render a canned (but contextual) reply
+// suggestion. No network calls.
+
+function SidekickReplyHelper({
+  fallback,
+  archetypeName,
+}: {
+  fallback: string;
+  archetypeName: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [clientReply, setClientReply] = useState("");
+  const [response, setResponse] = useState<string | null>(null);
+  const [thinking, setThinking] = useState(false);
+
+  const composedPrompt = `My client replied to my travel advisor outreach. Here's what they said: ${
+    clientReply.trim() || "[paste their reply]"
+  } How should I respond?`;
+
+  function ask() {
+    if (!clientReply.trim() || thinking) return;
+    setThinking(true);
+    setResponse(null);
+    // Simulate Sidekick "thinking" so the UI feels real.
+    window.setTimeout(() => {
+      setResponse(buildSuggestedReply(clientReply, fallback));
+      setThinking(false);
+    }, 700);
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between gap-3 border border-ink/20 bg-creamDeep/40 px-4 py-3 text-left transition hover:border-ink hover:bg-creamDeep/70"
+        aria-expanded={false}
+      >
+        <span className="font-display text-base leading-snug tracking-tightish text-ink">
+          Ask Sidekick how to reply{" "}
+          <span aria-hidden className="text-coral">
+            ✨
+          </span>
+        </span>
+        <span
+          aria-hidden
+          className="text-xs uppercase tracking-[0.16em] text-ink/55"
+        >
+          Open
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="border border-ink/15 bg-creamDeep/40 p-4">
+      <div className="flex items-center justify-between">
+        <p className="eyebrow">
+          Sidekick <span aria-hidden>✨</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setResponse(null);
+          }}
+          className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55 transition hover:text-ink"
+          aria-label="Close Sidekick helper"
+        >
+          Close
+        </button>
+      </div>
+
+      <label className="mt-3 block">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/70">
+          What did {archetypeName.toLowerCase().includes("the ")
+            ? archetypeName
+            : "they"}{" "}
+          say?
+        </span>
+        <textarea
+          value={clientReply}
+          onChange={(e) => setClientReply(e.target.value)}
+          placeholder="Paste their reply here&hellip;"
+          rows={3}
+          className="input-editorial mt-2 w-full resize-y"
+        />
+      </label>
+
+      {/* Show the composed prompt so the advisor can see exactly what would
+          be sent to Sidekick. Helpful for trust + transparency. */}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55 transition hover:text-ink">
+          Show prompt
+        </summary>
+        <p className="mt-2 border-l border-ink/20 pl-3 font-mono text-xs leading-relaxed text-ink/70">
+          {composedPrompt}
+        </p>
+      </details>
+
+      <button
+        type="button"
+        onClick={ask}
+        disabled={!clientReply.trim() || thinking}
+        className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {thinking ? "Thinking…" : "Ask Sidekick ✨"}
+      </button>
+
+      {response && (
+        <div className="mt-4 animate-fadeUp border-l-2 border-ink/80 pl-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/70">
+            Suggested reply
+          </p>
+          <p className="mt-2 font-display text-base leading-relaxed text-ink whitespace-pre-line sm:text-lg">
+            {response}
+          </p>
+          <button
+            type="button"
+            onClick={() => copyToClipboard(response)}
+            className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/60 underline-offset-4 transition hover:text-ink hover:underline"
+          >
+            Copy reply
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Mock Sidekick reply builder. Picks a tone based on simple keyword sniffing
+ * and folds in the archetype's followUp text as a baseline. Deliberately
+ * deterministic so the demo is predictable.
+ */
+function buildSuggestedReply(clientReply: string, fallback: string): string {
+  const lower = clientReply.toLowerCase();
+
+  const isHesitant = /not sure|maybe|thinking|don't know|unsure|later/.test(
+    lower,
+  );
+  const isInterested = /yes|sounds great|love|interested|tell me more|let's/.test(
+    lower,
+  );
+  const askedCost = /cost|price|fee|expensive|how much|charge/.test(lower);
+
+  if (askedCost) {
+    return `Great question. There's no cost to you for using me as your advisor — the hotels and travel partners pay my commission directly. You'd pay the same room rate you'd find online, often less, plus the perks I can add (room upgrades, breakfast, resort credits where available).\n\n${fallback}`;
+  }
+
+  if (isHesitant) {
+    return `No pressure at all. When you're ready, even a rough idea of where and when works as a starting point. I'll come back with one or two options you can react to, and we go from there.`;
+  }
+
+  if (isInterested) {
+    return `Wonderful! ${fallback}\n\nWhenever you have a few minutes, just send over the basics (rough dates, who's traveling, anything you already know you want or want to avoid) and I'll handle the rest.`;
+  }
+
+  // Generic fallback.
+  return `Thanks for getting back to me! ${fallback}`;
 }

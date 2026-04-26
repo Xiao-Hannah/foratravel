@@ -31,12 +31,13 @@ export const STATUS_META: Record<
 > = {
   sent: {
     label: "Sent",
-    tone: "border-ink/30 bg-cream text-ink",
+    tone: "border-ink/30 bg-cream text-ink/70",
     next: "replied",
   },
   replied: {
+    // Neutral, warm tone — coral was reading as an error/alert.
     label: "Replied",
-    tone: "border-coral/60 bg-coral/10 text-coral",
+    tone: "border-taupe/60 bg-creamDeep text-ink",
     next: "booked",
   },
   booked: {

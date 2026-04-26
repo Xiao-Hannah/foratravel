@@ -11,8 +11,8 @@ type Props = {
 
 /**
  * Link to the walkthrough that clears any persisted session first, so
- * clicking it from the homepage always lands the user on Step 1
- * ("Choose a preferred partner") with a clean slate.
+ * clicking it from the homepage always lands the user on the welcome
+ * screen with a clean slate.
  */
 export function StartWalkthroughLink({ children, className }: Props) {
   return (

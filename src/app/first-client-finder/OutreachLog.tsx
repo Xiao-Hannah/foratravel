@@ -259,7 +259,7 @@ function LogRow({
           <button
             type="button"
             onClick={onAdvance}
-            className="border border-coral/60 bg-coral/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-coral transition hover:bg-coral/20"
+            className="border border-ink bg-ink/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink transition hover:bg-ink/10"
           >
             → {STATUS_META[meta.next].label}
           </button>

@@ -1,33 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { STEP_NAMES } from "./data";
 
 type Props = {
-  /** Current step (1-indexed). Step 1 shows "All tools"; later steps offer "Back". */
+  /** Current step (1-indexed). Step 0 is the welcome screen with no back link. */
   currentStep: number;
-  /** Called when the user clicks "All tools" on step 1 to clear session state. */
-  onExit: () => void;
   /** Called when the user clicks the in-walkthrough back link. */
   onBack: () => void;
 };
 
 /**
- * Top-of-walkthrough nav. On the welcome screen (step 0) it leads back to
- * the tools index; on later steps it walks the user back one step at a time.
+ * Top-of-walkthrough nav. The welcome screen (step 0) has no back link
+ * because the global header already offers "All tools". From step 1 onward
+ * we walk the user back one step at a time.
  */
-export function WalkthroughNav({ currentStep, onExit, onBack }: Props) {
+export function WalkthroughNav({ currentStep, onBack }: Props) {
   const isWelcome = currentStep <= 0;
   return (
     <nav className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-wtMuted">
       {isWelcome ? (
-        <Link
-          href="/"
-          onClick={onExit}
-          className="inline-flex items-center gap-2 transition hover:text-ink"
-        >
-          <span aria-hidden>←</span> All tools
-        </Link>
+        <span aria-hidden />
       ) : (
         <button
           type="button"

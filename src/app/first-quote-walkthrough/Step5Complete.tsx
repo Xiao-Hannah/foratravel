@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Check } from "lucide-react";
 import { fmtMoney } from "./data";
 
@@ -42,13 +41,6 @@ export function Step5Complete({ earnings, onRestart }: Props) {
         >
           Send another quote →
         </button>
-        <Link
-          href="/"
-          onClick={onRestart}
-          className="block w-full py-3 rounded-md font-semibold text-sm border border-brown text-brown bg-transparent hover:bg-brown/5 transition-colors"
-        >
-          Back to all tools
-        </Link>
       </div>
 
       <p className="text-xs text-wtMuted mt-8">

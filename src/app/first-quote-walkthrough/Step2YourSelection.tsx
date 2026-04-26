@@ -8,6 +8,7 @@ import {
   calcEarnings,
   commissionRateFor,
   fmtMoney,
+  pricePerNight,
 } from "./data";
 
 type Props = {
@@ -15,6 +16,10 @@ type Props = {
 };
 
 export function Step2YourSelection({ hotel }: Props) {
+  // Show pricing on a per-night basis — that's how clients think about
+  // hotel cost. The weekly figure is included as a subtitle so advisors can
+  // still cross-check at a glance.
+  const ppn = pricePerNight(hotel);
   const commission = calcCommission(hotel.pricePerWeek, hotel);
   const earnings = calcEarnings(hotel.pricePerWeek, hotel);
   const rate = commissionRateFor(hotel);
@@ -28,7 +33,13 @@ export function Step2YourSelection({ hotel }: Props) {
 
       {/* Hotel card */}
       <div className="bg-wtCard rounded-xl overflow-hidden shadow-sm border border-wtBorder/70">
-        <div className="relative h-[180px] bg-beigeImage">
+        <div className="relative h-[180px] bg-beigeImage overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={hotel.imageUrl}
+            alt={`${hotel.name}, ${hotel.location}`}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
           <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-bold text-white flex items-center gap-1 bg-success">
             <Check size={12} strokeWidth={3} /> Selected
           </div>
@@ -50,7 +61,9 @@ export function Step2YourSelection({ hotel }: Props) {
             <Star size={13} className="fill-ink text-ink" />
             <span className="font-medium">{hotel.rating.toFixed(1)}</span>
             <span className="text-wtMuted">·</span>
-            <span className="font-medium">
+            <span className="font-medium">{fmtMoney(ppn)}/night</span>
+            <span className="text-wtMuted">·</span>
+            <span className="text-wtMuted text-xs">
               {fmtMoney(hotel.pricePerWeek)}/week
             </span>
           </div>
@@ -61,10 +74,7 @@ export function Step2YourSelection({ hotel }: Props) {
       <div className="bg-wtCard rounded-xl p-6 shadow-sm border border-wtBorder/70 mt-5">
         <h4 className="font-bold mb-4">What you'll earn</h4>
         <div className="space-y-2.5 text-sm">
-          <Row
-            label="Base price"
-            value={`${fmtMoney(hotel.pricePerWeek)}/week`}
-          />
+          <Row label="Base price" value={`${fmtMoney(ppn)}/night`} />
           <Row
             label="Commission rate"
             value={`${(rate * 100).toFixed(0)}% (${
@@ -81,7 +91,8 @@ export function Step2YourSelection({ hotel }: Props) {
             </span>
           </div>
           <p className="text-xs text-wtMuted pt-1">
-            Paid after client completes trip.
+            Earnings shown for a full week stay. Final amount adjusts to your
+            client&rsquo;s actual nights. Paid after the trip completes.
           </p>
         </div>
         {/* hidden math reference for clarity */}

@@ -6,6 +6,13 @@ export type Background =
   | "corporate"
   | "education"
   | "wellness"
+  | "hospitality"
+  | "tech"
+  | "sales"
+  | "nonprofit"
+  | "entrepreneur"
+  | "parent"
+  | "student"
   | "other";
 
 export type Network =
@@ -22,10 +29,18 @@ export type Specialty =
   | "adventure"
   | "beach";
 
+export type OutreachStyle =
+  | "one_to_one"   // direct messages to people I already know
+  | "content"      // posting publicly (social, blog, newsletter)
+  | "events"       // hosting gatherings or showing up at events in person
+  | "referrals"    // word of mouth, asking close ties to refer
+  | "unsure";      // not sure yet, want to try a bit of everything
+
 export type Answers = {
   background: Background;
   network: Network;
   specialty: Specialty;
+  outreachStyle: OutreachStyle;
 };
 
 export type TieStrength = "close" | "weak" | "broadcast";
@@ -49,11 +64,18 @@ export type Archetype = {
 // ---------- Quiz options (label data lives with logic for one source of truth)
 
 export const backgroundOptions: { value: Background; label: string }[] = [
-  { value: "creative", label: "Creative & Lifestyle" },
+  { value: "creative", label: "Creative & Lifestyle (design, writing, content)" },
   { value: "corporate", label: "Corporate & Finance" },
-  { value: "education", label: "Education & Community" },
+  { value: "tech", label: "Tech & Engineering" },
+  { value: "sales", label: "Sales & Real Estate" },
+  { value: "hospitality", label: "Hospitality & Service" },
+  { value: "education", label: "Education & Academia" },
   { value: "wellness", label: "Health & Wellness" },
-  { value: "other", label: "Other" },
+  { value: "nonprofit", label: "Nonprofit & Community" },
+  { value: "entrepreneur", label: "Entrepreneur / Small Business Owner" },
+  { value: "parent", label: "Stay-at-home Parent / Caregiver" },
+  { value: "student", label: "Student / Recent Grad" },
+  { value: "other", label: "Something else" },
 ];
 
 export const networkOptions: { value: Network; label: string }[] = [
@@ -70,6 +92,14 @@ export const specialtyOptions: { value: Specialty; label: string }[] = [
   { value: "honeymoon", label: "Honeymoons & Romance" },
   { value: "adventure", label: "Adventure Travel" },
   { value: "beach", label: "Beach & Resorts" },
+];
+
+export const outreachStyleOptions: { value: OutreachStyle; label: string }[] = [
+  { value: "one_to_one", label: "Direct messages to people I already know" },
+  { value: "content", label: "Posting publicly (social, blog, newsletter)" },
+  { value: "events", label: "Hosting gatherings or showing up at events" },
+  { value: "referrals", label: "Word of mouth and referrals" },
+  { value: "unsure", label: "Not sure yet, I want to try a bit of everything" },
 ];
 
 // ---------- Message fragments
@@ -114,7 +144,14 @@ const specialtyFollowUp: Record<Specialty, string> = {
 // advisor sees the breadth of their network.
 
 function buildClose(a: Answers): Archetype {
-  const { specialty, background } = a;
+  const { specialty, background, outreachStyle } = a;
+
+  // Referral-focused advisors get a small nudge to ask their close ties for
+  // intros, not just for their own trips.
+  const referralFlavor =
+    outreachStyle === "referrals"
+      ? " Ask if they know anyone else with a trip on the calendar, that's where the second booking usually comes from."
+      : "";
 
   // Close-tie archetype keys on specialty most strongly.
   if (specialty === "honeymoon") {
@@ -149,14 +186,29 @@ function buildClose(a: Answers): Archetype {
     why: "They book trips all the time anyway. They just don't realize booking through you is free for them.",
     rationale: `Close ties who already travel are the fastest path to a first booking. ${capitalize(
       background,
-    )} backgrounds tend to convert these first.`,
+    )} backgrounds tend to convert these first.${referralFlavor}`,
     message: `Hi {{name}}, sharing a quick update. I recently joined Fora as a travel advisor. ${specialtyHook[specialty]}. Next time you're booking a trip, send it my way and I'll handle it. There's no cost to you, the hotel pays my commission.`,
     followUp: specialtyFollowUp[specialty],
   };
 }
 
 function buildWeak(a: Answers): Archetype {
-  const { network, specialty } = a;
+  const { network, specialty, outreachStyle } = a;
+
+  // Event hosts get a different weak-tie archetype: a small in-person gather
+  // is one of the highest-converting first-week actions for them.
+  if (outreachStyle === "events") {
+    return {
+      id: "weak_event_guest",
+      name: "The Acquaintance You'd Invite to a Small Gathering",
+      tie: "weak",
+      why: "People show up for hosts they like, and a casual event is a low-pressure way to mention what you do without it feeling like a pitch.",
+      rationale:
+        "Hosting plays to your strengths. One small gathering surfaces 5-10 warm leads at once, far more efficient than a string of DMs.",
+      message: `Hi {{name}}, I'm putting together a small get-together in the next few weeks (low-key, just a few people). I'd love to have you there. Quick heads up: I recently joined Fora as a travel advisor, so travel will probably come up, but no pressure on that front.`,
+      followUp: specialtyFollowUp[specialty],
+    };
+  }
 
   if (network === "colleagues" || network === "mix") {
     return {
@@ -195,9 +247,18 @@ function buildWeak(a: Answers): Archetype {
 }
 
 function buildBroadcast(a: Answers): Archetype {
-  const { network, specialty, background } = a;
+  const { network, specialty, background, outreachStyle } = a;
 
-  if (network === "social" || background === "creative") {
+  const isPublicBackground =
+    background === "creative" ||
+    background === "education" ||
+    background === "entrepreneur";
+
+  if (
+    outreachStyle === "content" ||
+    network === "social" ||
+    isPublicBackground
+  ) {
     return {
       id: "broadcast_social",
       name: "The Follower Who Loves Your Travel Content",

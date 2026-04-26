@@ -10,13 +10,7 @@ export const metadata = {
 export default function Page() {
   return (
     <main className="mx-auto max-w-2xl px-5 pb-24 pt-10 sm:pt-14">
-      <nav className="mb-10 flex items-center justify-between text-xs uppercase tracking-[0.16em] text-ink/55">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 transition hover:text-ink"
-        >
-          <span aria-hidden>←</span> All tools
-        </Link>
+      <nav className="mb-10 flex items-center justify-end text-xs uppercase tracking-[0.16em] text-ink/55">
         <Link
           href="/first-client-finder/log"
           className="transition hover:text-ink"

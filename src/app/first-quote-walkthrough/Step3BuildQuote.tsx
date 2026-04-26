@@ -76,7 +76,12 @@ export function Step3BuildQuote({
 
       {/* Hotel summary */}
       <div className="bg-wtCard rounded-xl p-4 shadow-sm border border-wtBorder/70 flex items-center gap-4">
-        <div className="w-[60px] h-[60px] rounded-md bg-beigeImage shrink-0" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={hotel.imageUrl}
+          alt={`${hotel.name}, ${hotel.location}`}
+          className="w-[60px] h-[60px] rounded-md bg-beigeImage object-cover shrink-0"
+        />
         <div>
           <div className="font-semibold text-sm">{hotel.name}</div>
           <div className="text-xs text-wtMuted">{hotel.location}</div>

@@ -43,7 +43,12 @@ export function Step4ReviewSend({
       {/* Quote preview */}
       <div className="bg-wtCard rounded-xl p-6 shadow-sm border border-wtBorder/70">
         <div className="flex gap-4 mb-4">
-          <div className="w-20 h-20 rounded-md bg-beigeImage shrink-0" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={hotel.imageUrl}
+            alt={`${hotel.name}, ${hotel.location}`}
+            className="w-20 h-20 rounded-md bg-beigeImage object-cover shrink-0"
+          />
           <div>
             <h3 className="font-bold">{hotel.name}</h3>
             <p className="text-xs text-wtMuted mb-2">{hotel.location}</p>

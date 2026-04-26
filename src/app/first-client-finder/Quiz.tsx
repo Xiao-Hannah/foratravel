@@ -4,9 +4,11 @@ import {
   Answers,
   Background,
   Network,
+  OutreachStyle,
   Specialty,
   backgroundOptions,
   networkOptions,
+  outreachStyleOptions,
   specialtyOptions,
 } from "./data";
 
@@ -30,6 +32,11 @@ const QUIZ_STEPS: {
     question: "What type of travel do you know best?",
     options: specialtyOptions,
   },
+  {
+    key: "outreachStyle",
+    question: "How do you want to reach your first clients?",
+    options: outreachStyleOptions,
+  },
 ];
 
 export const QUIZ_TOTAL_STEPS = QUIZ_STEPS.length;
@@ -51,7 +58,13 @@ export default function Quiz({
 
   function pick(value: string) {
     const isFinal = step === total - 1;
-    const patch = { [config.key]: value as Background | Network | Specialty } as Partial<Answers>;
+    const patch = {
+      [config.key]: value as
+        | Background
+        | Network
+        | Specialty
+        | OutreachStyle,
+    } as Partial<Answers>;
     onAnswer(patch, isFinal);
   }
 
