@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Star, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, GitCompare, Star, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { CompareModal } from "./CompareModal";
+import { SidekickDrawer } from "./SidekickDrawer";
 import {
   type ClientBrief,
   type Hotel,
@@ -18,6 +20,8 @@ type Props = {
   onSelect: (h: Hotel) => void;
   /** The Client Brief from the previous step. Drives filtering + Sidekick context. */
   brief: ClientBrief;
+  /** Optional client name from the welcome step — used in AI copy. */
+  clientName?: string;
 };
 
 type SortKey = "perks" | "commission" | "rating";
@@ -28,16 +32,26 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "rating", label: "Top rated" },
 ];
 
-export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
+const MAX_COMPARE = 3;
+
+export function Step1ChoosePartner({
+  selectedHotel,
+  onSelect,
+  brief,
+  clientName,
+}: Props) {
   const [showBanner, setShowBanner] = useState(true);
   const [sort, setSort] = useState<SortKey>("perks");
   const [sidekickQuery, setSidekickQuery] = useState("");
-  const [sidekickAnswer, setSidekickAnswer] = useState<{
-    text: string;
-    hotelId: string;
-    hotelName: string;
-  } | null>(null);
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  // Compare mode state.
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  // Drawer state.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerSeed, setDrawerSeed] = useState<string | undefined>(undefined);
 
   // When the brief is "undecided", treat budget as unfiltered so the user
   // sees everything. Otherwise, filter to in-budget hotels (but always show
@@ -52,7 +66,6 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
   const sorted = useMemo(() => {
     const list = [...filtered];
     if (sort === "perks") {
-      // Reserve first, then by rating desc.
       list.sort((a, b) => {
         if (a.isReserve !== b.isReserve) return a.isReserve ? -1 : 1;
         return b.rating - a.rating;
@@ -65,70 +78,103 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
     return list;
   }, [filtered, sort]);
 
-  // Sidekick is intentionally deterministic / mocked — picks the highest-
-  // earning Reserve hotel in the current sorted list when available,
-  // otherwise the highest-rated overall.
-  function askSidekick() {
-    if (!sidekickQuery.trim()) return;
-    const reserveCandidates = sorted.filter((h) => h.isReserve);
-    const pick =
-      reserveCandidates[0] ??
-      [...sorted].sort((a, b) => b.rating - a.rating)[0];
-    if (!pick) return;
-    const earn = cardEarnings(pick);
-    const perks =
-      pick.perks?.slice(0, 2).join(" and ").toLowerCase() ??
-      "exclusive amenities";
-    const isHoneymoon = /honeymoon|romance|romantic/i.test(
-      sidekickQuery + " " + brief.preferences,
-    );
-    const tripLabel = isHoneymoon ? "a honeymoon" : "this trip";
-    const text = pick.isReserve
-      ? `For ${tripLabel}, ${pick.name} offers the best perks — ${perks}. It's also one of your highest-commission options at an estimated ${fmtMoney(
-          earn,
-        )} for this booking.`
-      : `${pick.name} is your top-rated match. You'd earn an estimated ${fmtMoney(
-          earn,
-        )} on this booking.`;
-    setSidekickAnswer({ text, hotelId: pick.id, hotelName: pick.name });
+  // Drop selections that fall out of the visible list (e.g. after sort/filter).
+  useEffect(() => {
+    setCompareIds((ids) => ids.filter((id) => sorted.some((h) => h.id === id)));
+  }, [sorted]);
+
+  // Exit compare mode cleanly: also clear selections.
+  useEffect(() => {
+    if (!compareMode) setCompareIds([]);
+  }, [compareMode]);
+
+  const compareHotels = useMemo(
+    () =>
+      compareIds
+        .map((id) => sorted.find((h) => h.id === id))
+        .filter((h): h is Hotel => !!h),
+    [compareIds, sorted],
+  );
+
+  // ---- AI banner copy ----
+  const who = clientName?.trim() || "your client";
+  const dest = brief.destination?.trim();
+  const reserveCountVisible = sorted.filter((h) => h.isReserve).length;
+  const bannerText = (() => {
+    if (reserveCountVisible === 0) {
+      return `Based on ${who}${dest ? `'s ${dest} trip` : "'s preferences"}, here are the strongest matches — sort by Highest commission to see your best earners.`;
+    }
+    if (dest) {
+      return `Based on ${who}'s ${dest} trip, we recommend Fora Reserve properties — they offer exclusive perks and earn you the highest commission.`;
+    }
+    return `Based on ${who}'s preferences, we recommend Fora Reserve properties — they offer exclusive client perks and earn you the highest commission.`;
+  })();
+
+  function toggleCompareSelect(id: string) {
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= MAX_COMPARE) return prev;
+      return [...prev, id];
+    });
   }
 
-  function jumpToHotel(id: string) {
-    const el = document.getElementById(`hotel-card-${id}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setHighlightedId(id);
-      window.setTimeout(() => setHighlightedId(null), 2000);
+  function openDrawerFromInline() {
+    const q = sidekickQuery.trim();
+    if (q) {
+      setDrawerSeed(q);
+      setSidekickQuery("");
+    } else {
+      setDrawerSeed(undefined);
     }
+    setDrawerOpen(true);
+  }
+
+  function openDrawerFromBanner() {
+    setDrawerSeed(undefined);
+    setDrawerOpen(true);
+  }
+
+  function openDrawerFromCompare() {
+    setDrawerSeed(undefined);
+    setCompareOpen(false);
+    setDrawerOpen(true);
   }
 
   const sidekickPlaceholder = brief.undecided
     ? "e.g. What's a good property for a first-time luxury traveler?"
-    : `e.g. Which property gives my client the best perks for ${
-        brief.preferences
-          ? brief.preferences.split(",")[0].trim()
-          : "their trip"
-      } in ${brief.destination || "this destination"}${
-        brief.budget !== "unsure" ? " under their budget" : ""
+    : `e.g. Which property gives ${who} the best perks${
+        dest ? ` in ${dest}` : ""
       }?`;
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">Choose a preferred partner</h1>
       <p className="text-sm text-wtMuted mb-5">
-        Pick the property you'd like to quote for your client.
-        {!brief.undecided && brief.destination && (
+        Pick the property you&rsquo;d like to quote for your client.
+        {clientName?.trim() && (
           <>
             {" "}
-            Searching{" "}
-            <span className="font-medium text-ink">{brief.destination}</span>
+            Searching for{" "}
+            <span className="font-medium text-ink">{clientName.trim()}</span>
+            {dest && (
+              <>
+                {" "}in <span className="font-medium text-ink">{dest}</span>
+              </>
+            )}
+            .
+          </>
+        )}
+        {!clientName?.trim() && !brief.undecided && dest && (
+          <>
+            {" "}
+            Searching <span className="font-medium text-ink">{dest}</span>
             {brief.budget !== "unsure" && <> at this budget</>}.
           </>
         )}
       </p>
 
-      {/* Sidekick bar */}
-      <div className="mb-5 bg-wtCard rounded-xl p-4 shadow-sm border border-wtBorder/70">
+      {/* Inline Sidekick bar — opens the chat drawer on submit. */}
+      <div className="mb-4 bg-wtCard rounded-xl p-4 shadow-sm border border-wtBorder/70">
         <label
           htmlFor="sidekick-input"
           className="block text-xs font-semibold text-ink mb-2"
@@ -144,7 +190,7 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                askSidekick();
+                openDrawerFromInline();
               }
             }}
             placeholder={sidekickPlaceholder}
@@ -152,58 +198,44 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
           />
           <button
             type="button"
-            onClick={askSidekick}
-            disabled={!sidekickQuery.trim()}
-            className={cn(
-              "shrink-0 text-sm font-semibold px-4 py-2 rounded-md transition-colors",
-              sidekickQuery.trim()
-                ? "bg-brown hover:bg-brownHover text-white"
-                : "bg-wtMutedBg text-wtMuted cursor-not-allowed",
-            )}
+            onClick={openDrawerFromInline}
+            className="shrink-0 text-sm font-semibold px-4 py-2 rounded-md bg-brown hover:bg-brownHover text-white transition-colors"
           >
             Ask →
           </button>
         </div>
-
-        {sidekickAnswer && (
-          <div className="mt-4 p-4 bg-wtCard border-l-[3px] border-brown rounded-md fade-up">
-            <p className="text-sm text-ink/90 leading-relaxed">
-              <span className="font-semibold">✨ Sidekick recommends:</span>{" "}
-              {sidekickAnswer.text}
-            </p>
-            <button
-              type="button"
-              onClick={() => jumpToHotel(sidekickAnswer.hotelId)}
-              className="mt-3 text-xs font-semibold text-brown hover:text-brownHover transition-colors"
-            >
-              View {sidekickAnswer.hotelName} →
-            </button>
-          </div>
-        )}
       </div>
 
+      {/* AI recommendation banner */}
       {showBanner && (
-        <div className="mb-5 rounded-lg p-4 pr-10 relative bg-reserveBanner border-l-[3px] border-reserve">
-          <div className="flex gap-2 items-start text-sm text-ink/90">
-            <span aria-hidden>⭐</span>
-            <p>
-              <span className="font-semibold">Fora Reserve</span> properties
-              offer higher commission and exclusive client perks. We
-              recommend starting here.
-            </p>
-          </div>
+        <div className="mb-5 rounded-lg p-4 pr-10 relative bg-[#FDF3DC] border-l-[3px] border-reserve fade-up">
           <button
             type="button"
             onClick={() => setShowBanner(false)}
-            aria-label="Dismiss"
-            className="absolute top-3 right-3 text-wtMuted hover:text-ink"
+            aria-label="Dismiss recommendation"
+            className="absolute top-2.5 right-2.5 text-wtMuted hover:text-ink"
           >
-            <X size={16} />
+            <X size={14} />
           </button>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <div className="flex gap-2 items-start text-sm text-ink/90 flex-1">
+              <span aria-hidden className="text-base leading-none mt-0.5">
+                ✨
+              </span>
+              <p className="leading-relaxed">{bannerText}</p>
+            </div>
+            <button
+              type="button"
+              onClick={openDrawerFromBanner}
+              className="shrink-0 text-xs font-semibold text-brown hover:text-brownHover transition-colors self-start sm:self-auto"
+            >
+              Ask Sidekick →
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Sort pills */}
+      {/* Sort pills + Compare toggle */}
       <div className="mb-5 flex items-center flex-wrap gap-2">
         <span className="text-xs font-semibold text-wtMuted uppercase tracking-wide mr-1">
           Sort by:
@@ -227,33 +259,85 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
             </button>
           );
         })}
+
+        <span className="hidden sm:inline-block w-px h-4 bg-wtBorder mx-1" />
+
+        <button
+          type="button"
+          onClick={() => setCompareMode((v) => !v)}
+          aria-pressed={compareMode}
+          className={cn(
+            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+            compareMode
+              ? "bg-brown text-white border-brown"
+              : "bg-wtCard text-brown border-brown/60 hover:bg-brown/5",
+          )}
+        >
+          <GitCompare size={12} />
+          {compareMode ? "Exit compare" : "Compare"}
+        </button>
+
+        {compareMode && (
+          <span className="text-[11px] text-wtMuted ml-1">
+            Pick up to {MAX_COMPARE} properties
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {sorted.map((h) => {
           const isSelected = selectedHotel?.id === h.id;
-          const isHighlighted = highlightedId === h.id;
+          const isCompared = compareIds.includes(h.id);
           const earnings = cardEarnings(h);
           const showMatch =
             !brief.undecided &&
             brief.budget !== "unsure" &&
             matchesBudget(h, brief.budget);
           const ppn = pricePerNight(h);
+          const atCompareCap =
+            compareIds.length >= MAX_COMPARE && !isCompared;
           return (
             <button
               key={h.id}
               id={`hotel-card-${h.id}`}
               type="button"
-              onClick={() => onSelect(h)}
+              onClick={() => {
+                if (compareMode) {
+                  if (atCompareCap) return;
+                  toggleCompareSelect(h.id);
+                } else {
+                  onSelect(h);
+                }
+              }}
+              aria-pressed={compareMode ? isCompared : isSelected}
               className={cn(
-                "text-left bg-wtCard rounded-xl overflow-hidden transition-all border-2 hover:shadow-md flex flex-col items-stretch",
-                isSelected
-                  ? "border-brown shadow-md"
-                  : isHighlighted
-                    ? "border-brown shadow-md ring-2 ring-brown/30"
+                "relative text-left bg-wtCard rounded-xl overflow-hidden transition-all border-2 hover:shadow-md flex flex-col items-stretch",
+                compareMode
+                  ? isCompared
+                    ? "border-brown shadow-md"
+                    : atCompareCap
+                      ? "border-transparent opacity-60 cursor-not-allowed"
+                      : "border-transparent"
+                  : isSelected
+                    ? "border-brown shadow-md"
                     : "border-transparent",
               )}
             >
+              {/* Compare-mode checkbox overlay */}
+              {compareMode && (
+                <span
+                  className={cn(
+                    "absolute top-3 left-3 z-10 inline-flex items-center justify-center w-6 h-6 rounded-md border-2 transition-colors shadow-sm",
+                    isCompared
+                      ? "bg-brown border-brown text-white"
+                      : "bg-wtCard/95 border-wtBorder text-transparent",
+                  )}
+                  aria-hidden
+                >
+                  <Check size={14} strokeWidth={3} />
+                </span>
+              )}
+
               <div className="relative h-[200px] bg-beigeImage overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -263,11 +347,16 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
                   className="absolute inset-0 h-full w-full object-cover"
                 />
                 {h.isReserve && (
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-bold text-white tracking-wide bg-reserve">
+                  <div
+                    className={cn(
+                      "absolute top-3 px-2.5 py-1 rounded-full text-[11px] font-bold text-white tracking-wide bg-reserve",
+                      compareMode ? "left-12" : "left-3",
+                    )}
+                  >
                     ⭐ FORA RESERVE
                   </div>
                 )}
-                {isSelected && (
+                {!compareMode && isSelected && (
                   <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[11px] font-bold text-white flex items-center gap-1 bg-success">
                     <Check size={12} strokeWidth={3} /> Selected
                   </div>
@@ -287,8 +376,6 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
                   ))}
                 </div>
 
-                {/* Earnings + perks rows. Earnings always shown; perks row
-                    only for Reserve cards (where perks are real). */}
                 <div className="space-y-1 mb-3">
                   <div className="text-xs font-semibold text-brown">
                     💰 Est. your earnings: {fmtMoney(earnings)}
@@ -322,6 +409,46 @@ export function Step1ChoosePartner({ selectedHotel, onSelect, brief }: Props) {
           );
         })}
       </div>
+
+      {/* Sticky compare bar */}
+      {compareMode && compareIds.length >= 2 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 fade-up">
+          <div className="bg-brown text-white rounded-full shadow-xl pl-5 pr-2 py-2 flex items-center gap-3">
+            <span className="text-sm font-semibold">
+              Comparing {compareIds.length}{" "}
+              {compareIds.length === 1 ? "property" : "properties"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCompareOpen(true)}
+              className="text-xs font-semibold bg-wtCard text-brown px-3 py-1.5 rounded-full hover:bg-wtMutedBg transition-colors"
+            >
+              View comparison →
+            </button>
+          </div>
+        </div>
+      )}
+
+      <CompareModal
+        open={compareOpen && compareHotels.length >= 2}
+        hotels={compareHotels}
+        brief={brief}
+        onClose={() => setCompareOpen(false)}
+        onAskSidekick={openDrawerFromCompare}
+        onPickHotel={(h) => {
+          onSelect(h);
+          setCompareMode(false);
+        }}
+      />
+
+      <SidekickDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        brief={brief}
+        clientName={clientName}
+        hotels={sorted}
+        seedQuery={drawerSeed}
+      />
     </div>
   );
 }

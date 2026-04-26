@@ -219,6 +219,7 @@ export default function FirstQuoteWalkthrough() {
                   setSession((s) => ({ ...s, hotelId: h.id }))
                 }
                 brief={session.brief}
+                clientName={quote.clientName}
               />
             )}
 
