@@ -32,6 +32,7 @@ export default function OutreachLog() {
   const {
     log,
     hydrated,
+    addEntry,
     removeEntry,
     updateStatus,
     updateNote,
@@ -40,6 +41,7 @@ export default function OutreachLog() {
 
   const [filter, setFilter] = useState<"all" | OutreachStatus>("all");
   const [confirmClear, setConfirmClear] = useState(false);
+  const [addingContact, setAddingContact] = useState(false);
 
   const filtered = useMemo(
     () => (filter === "all" ? log : log.filter((e) => e.status === filter)),
@@ -81,7 +83,28 @@ export default function OutreachLog() {
         <p className="mt-5 max-w-md text-base leading-relaxed text-ink/75">
           When you mark a message as sent in the First Client Finder, the
           contact will show up here so you can track replies and bookings.
+          You can also log someone you reached out to outside the tool.
         </p>
+
+        <div className="mt-8">
+          {addingContact ? (
+            <ManualContactForm
+              onCancel={() => setAddingContact(false)}
+              onSave={(payload) => {
+                addEntry(payload);
+                setAddingContact(false);
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingContact(true)}
+              className="btn-outline"
+            >
+              + Log an outside contact
+            </button>
+          )}
+        </div>
       </section>
     );
   }
@@ -114,26 +137,52 @@ export default function OutreachLog() {
         ))}
       </dl>
 
-      {/* Filter chips */}
-      <div className="mt-8 flex flex-wrap gap-2">
+      {/* Filter — styled as a distinct labeled tab strip so it doesn't read
+          as another status-update control like the per-row buttons below. */}
+      <div className="mt-8 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink/15">
         {FILTERS.map((f) => {
           const active = filter === f.value;
+          const count =
+            f.value === "all" ? log.length : counts[f.value];
           return (
             <button
               key={f.value}
               type="button"
               onClick={() => setFilter(f.value)}
               aria-pressed={active}
-              className={`border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition ${
+              className={`-mb-px border-b-2 pb-3 pt-1 text-xs font-medium tracking-[0.04em] transition ${
                 active
-                  ? "border-ink bg-ink text-cream"
-                  : "border-ink/25 bg-cream text-ink/70 hover:border-ink hover:text-ink"
+                  ? "border-ink text-ink"
+                  : "border-transparent text-ink/55 hover:text-ink"
               }`}
             >
-              {f.label}
+              {f.label}{" "}
+              <span className="ml-0.5 text-ink/40">({count})</span>
             </button>
           );
         })}
+      </div>
+
+      {/* Add an outside contact — a small CTA, not a primary action, since
+          most entries flow in automatically from the finder. */}
+      <div className="mt-6">
+        {addingContact ? (
+          <ManualContactForm
+            onCancel={() => setAddingContact(false)}
+            onSave={(payload) => {
+              addEntry(payload);
+              setAddingContact(false);
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingContact(true)}
+            className="inline-flex items-center gap-1.5 border border-ink/25 bg-cream px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/75 transition hover:border-ink hover:text-ink"
+          >
+            <span aria-hidden>+</span> Log an outside contact
+          </button>
+        )}
       </div>
 
       <ul className="mt-6 divide-y divide-ink/10">
@@ -141,10 +190,6 @@ export default function OutreachLog() {
           <LogRow
             key={entry.id}
             entry={entry}
-            onAdvance={() => {
-              const next = STATUS_META[entry.status].next;
-              if (next) updateStatus(entry.id, next);
-            }}
             onSetStatus={(s) => updateStatus(entry.id, s)}
             onRemove={() => removeEntry(entry.id)}
             onNoteChange={(note) => updateNote(entry.id, note)}
@@ -201,13 +246,11 @@ export default function OutreachLog() {
 
 function LogRow({
   entry,
-  onAdvance,
   onSetStatus,
   onRemove,
   onNoteChange,
 }: {
   entry: OutreachEntry;
-  onAdvance: () => void;
   onSetStatus: (s: OutreachStatus) => void;
   onRemove: () => void;
   onNoteChange: (note: string) => void;
@@ -235,8 +278,12 @@ function LogRow({
         </span>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {/* Status quick-set buttons */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* Status quick-set buttons — these update the contact's funnel
+            stage. Visually distinct from the top-of-page filter tabs. */}
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">
+          Status
+        </span>
         {(Object.keys(STATUS_META) as OutreachStatus[]).map((s) => {
           const active = entry.status === s;
           return (
@@ -245,7 +292,7 @@ function LogRow({
               type="button"
               onClick={() => onSetStatus(s)}
               aria-pressed={active}
-              className={`border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+              className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
                 active
                   ? "border-ink bg-ink text-cream"
                   : "border-ink/20 bg-cream text-ink/65 hover:border-ink hover:text-ink"
@@ -255,15 +302,6 @@ function LogRow({
             </button>
           );
         })}
-        {meta.next && (
-          <button
-            type="button"
-            onClick={onAdvance}
-            className="border border-ink bg-ink/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink transition hover:bg-ink/10"
-          >
-            → {STATUS_META[meta.next].label}
-          </button>
-        )}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -276,10 +314,18 @@ function LogRow({
 
       {open && (
         <div className="mt-4 border-l border-ink/20 pl-4">
-          <p className="eyebrow">Message sent</p>
-          <p className="mt-2 font-display text-sm leading-relaxed text-ink/85 whitespace-pre-line">
-            {entry.message}
-          </p>
+          {entry.message.trim() ? (
+            <>
+              <p className="eyebrow">Message sent</p>
+              <p className="mt-2 font-display text-sm leading-relaxed text-ink/85 whitespace-pre-line">
+                {entry.message}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs italic leading-relaxed text-ink/55">
+              Logged outside the finder, no message body recorded.
+            </p>
+          )}
 
           <label className="mt-5 block">
             <span className="eyebrow">Notes</span>
@@ -304,5 +350,126 @@ function LogRow({
         </div>
       )}
     </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ManualContactForm
+// ---------------------------------------------------------------------------
+// Lightweight form for logging a contact the advisor reached out to OUTSIDE
+// of First Client Finder (in person, an old DM, etc.). We keep the schema
+// identical to auto-logged entries so funnel counts and filters just work.
+
+function ManualContactForm({
+  onSave,
+  onCancel,
+}: {
+  onSave: (payload: {
+    archetypeId: string;
+    archetypeName: string;
+    recipientName: string;
+    message: string;
+    status: OutreachStatus;
+    note?: string;
+  }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState<OutreachStatus>("sent");
+  const [note, setNote] = useState("");
+
+  const ready = name.trim().length > 0;
+
+  function save() {
+    if (!ready) return;
+    onSave({
+      // Stable id + label so these contacts are identifiable in the entry
+      // metadata as having been logged outside the finder.
+      archetypeId: "manual",
+      archetypeName: "Logged outside the finder",
+      recipientName: name.trim(),
+      // No message body — the outreach happened off-tool. We leave this
+      // empty rather than fake one; the details panel will hide if blank.
+      message: "",
+      status,
+      note: note.trim() || undefined,
+    });
+  }
+
+  return (
+    <div className="border border-ink/25 bg-creamDeep/30 p-4 sm:p-5">
+      <p className="eyebrow">Log an outside contact</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink/65">
+        For people you reached out to in person, on a call, or somewhere
+        outside this tool.
+      </p>
+
+      <label className="mt-4 block">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/70">
+          Their name
+        </span>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="First name (or initials)"
+          className="input-editorial mt-2"
+          autoFocus
+        />
+      </label>
+
+      <div className="mt-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/70">
+          Where they are now
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(Object.keys(STATUS_META) as OutreachStatus[]).map((s) => {
+            const active = status === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatus(s)}
+                aria-pressed={active}
+                className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+                  active
+                    ? "border-ink bg-ink text-cream"
+                    : "border-ink/20 bg-cream text-ink/65 hover:border-ink hover:text-ink"
+                }`}
+              >
+                {STATUS_META[s].label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <label className="mt-4 block">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/70">
+          Notes (optional)
+        </span>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="e.g. Met at coffee, asked about a Greece trip in September."
+          rows={3}
+          className="input-editorial scroll-editorial mt-2 w-full resize-y"
+        />
+      </label>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={!ready}
+          className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Add to log
+        </button>
+        <button type="button" onClick={onCancel} className="btn-outline">
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }

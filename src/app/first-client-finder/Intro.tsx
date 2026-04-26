@@ -18,8 +18,8 @@ export default function Intro({
 
       <p className="mt-6 max-w-md text-base leading-relaxed text-ink/75 sm:text-lg">
         Most new advisors don't lack potential clients. They just don't
-        recognize them. Answer three quick questions and we'll show you
-        exactly who to message first, in words that sound like you.
+        recognize them. Answer five quick questions and we'll build your
+        personal pitch and a starter list of three people to message today.
       </p>
 
       {/* Sample card preview so the value is visible BEFORE the quiz. */}

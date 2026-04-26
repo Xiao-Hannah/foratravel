@@ -12,15 +12,37 @@ import Tracker from "./Tracker";
 export default function Results({
   answers,
   cards,
+  postDraft,
   onCardChange,
+  onBackToValueProp,
   onReset,
 }: {
   answers: Answers;
   cards: Record<string, CardState>;
+  /** Edited starter post from the value-prop screen. Overrides the
+   *  generated text on the broadcast card so the advisor's edits flow
+   *  through to the actual outreach. */
+  postDraft: string | null;
   onCardChange: (id: string, updater: (prev: CardState) => CardState) => void;
+  onBackToValueProp: () => void;
   onReset: () => void;
 }) {
-  const archetypes = useMemo(() => recommend(answers), [answers]);
+  // The broadcast card's message body is whatever the advisor typed on the
+  // value-prop screen (or the auto-generated post if untouched). We splice
+  // that into the recommended archetypes so ClientCard doesn't need to know
+  // about postDraft.
+  const archetypes = useMemo(() => {
+    const base = recommend(answers);
+    if (postDraft === null) return base;
+    return base.map((a) =>
+      a.id === "broadcast_post"
+        ? {
+            ...a,
+            messages: { casual: postDraft, professional: postDraft },
+          }
+        : a,
+    );
+  }, [answers, postDraft]);
   const sentCount = archetypes.filter((a) => cards[a.id]?.sent).length;
   const allSent = sentCount === archetypes.length;
 
@@ -61,7 +83,16 @@ export default function Results({
 
   return (
     <section className="animate-fadeUp">
-      <p className="eyebrow">Your starter list</p>
+      <div className="flex items-center justify-between">
+        <p className="eyebrow">Your starter list</p>
+        <button
+          type="button"
+          onClick={onBackToValueProp}
+          className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/60 transition hover:text-ink"
+        >
+          ← Edit pitch
+        </button>
+      </div>
       <h1 className="mt-4 font-display text-4xl font-normal leading-[1.02] tracking-tighter2 text-ink sm:text-[56px]">
         Three people.
         <br />

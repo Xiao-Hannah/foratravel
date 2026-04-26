@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fillMessage, recommend } from "./data";
+import { fillMessage, recommend, Tone } from "./data";
 import { CardState } from "./session";
 import { copyToClipboard } from "./clipboard";
 
@@ -54,12 +54,19 @@ export default function ClientCard({
   }) => void;
   onLogUndo: (archetypeId: string) => void;
 }) {
-  const filled = fillMessage(archetype.message, state.name);
+  const tone: Tone = state.tone ?? "casual";
+
+  // Resolve the displayed body: use the advisor's edit for the active tone
+  // if any, otherwise the generated template (with {{name}} filled).
+  const baseTemplate = archetype.messages[tone];
+  const editedForTone = state.edited?.[tone] ?? null;
+  const filled =
+    editedForTone !== null ? editedForTone : fillMessage(baseTemplate, state.name);
   const tie = TIE_META[archetype.tie];
 
   // Templates without a {{name}} placeholder are broadcast posts — the
   // recipient name input is irrelevant and only adds noise.
-  const usesName = archetype.message.includes("{{name}}");
+  const usesName = baseTemplate.includes("{{name}}");
 
   // Transient "Copied ✓" flash on the message preview when tapped.
   const [justCopied, setJustCopied] = useState(false);
@@ -263,7 +270,7 @@ export default function ClientCard({
             aria-expanded={isExpanded}
             aria-controls={`card-modal-${archetype.id}`}
           >
-            {state.sent ? "Edit message" : "Reach out"}{" "}
+            {state.sent ? "Edit message" : "Edit & share"}{" "}
             <span aria-hidden>→</span>
           </button>
         </div>
@@ -284,7 +291,7 @@ export default function ClientCard({
             if (e.target === e.currentTarget) onCollapse();
           }}
         >
-          <div className="relative w-full max-w-lg animate-fadeUp rounded-cta bg-cream p-6 shadow-2xl ring-1 ring-ink/10 sm:p-8">
+          <div className="relative w-full max-w-3xl animate-fadeUp rounded-cta bg-cream p-6 shadow-2xl ring-1 ring-ink/10 sm:p-8">
             {/* Close X — top right */}
             <button
               type="button"
@@ -350,34 +357,91 @@ export default function ClientCard({
                 </label>
               )}
 
-              {/* Message preview — click anywhere on it to copy. The
-                  whole block is the copy target now (no separate Copy
-                  button), with a hover hint and a transient "Copied ✓"
-                  badge in the corner. */}
-              <div className={usesName ? "mt-4" : "mt-6"}>
+              {/* Tone toggle — broadcast cards (post is the same in both
+                  tones) skip this so the UI stays honest. */}
+              {archetype.messages.casual !== archetype.messages.professional && (
+                <div className={usesName ? "mt-5" : "mt-6"}>
+                  <p className="eyebrow mb-2">Tone</p>
+                  <div
+                    role="tablist"
+                    aria-label="Message tone"
+                    className="inline-flex rounded-full border border-ink/25 p-0.5"
+                  >
+                    {(["casual", "professional"] as Tone[]).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        role="tab"
+                        aria-selected={tone === t}
+                        onClick={() =>
+                          onChange((p) => ({ ...p, tone: t }))
+                        }
+                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] transition ${
+                          tone === t
+                            ? "bg-ink text-cream"
+                            : "text-ink/60 hover:text-ink"
+                        }`}
+                      >
+                        {t === "casual" ? "Casual" : "Professional"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Editable message body. Bound to the per-tone edit slot.
+                  When the advisor types, we persist into edited[tone] so
+                  switching tones preserves both versions. */}
+              <div className="mt-4">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="eyebrow">Message</p>
-                  <span
-                    aria-hidden
-                    className={`text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
-                      justCopied ? "text-coral" : "text-ink/45"
-                    }`}
-                  >
-                    {justCopied ? "Copied ✓" : "Tap to copy"}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {editedForTone !== null && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onChange((p) => ({
+                            ...p,
+                            edited: { ...p.edited, [tone]: null },
+                          }))
+                        }
+                        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/55 transition hover:text-ink"
+                        aria-label="Reset message to template"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleCopyMessage}
+                      className={`text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+                        justCopied
+                          ? "text-coral"
+                          : "text-brown hover:text-brownHover"
+                      }`}
+                    >
+                      {justCopied ? "Copied ✓" : "Copy →"}
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCopyMessage}
-                  aria-label="Copy message to clipboard"
-                  className={`group relative block w-full border border-dashed p-4 text-left font-display text-base leading-relaxed text-ink transition sm:text-lg ${
-                    justCopied
-                      ? "border-coral bg-coral/10"
-                      : "border-ink/25 bg-creamDeep/40 hover:border-ink/60 hover:bg-creamDeep/70"
-                  }`}
-                >
-                  {filled}
-                </button>
+                <textarea
+                  value={filled}
+                  onChange={(e) =>
+                    onChange((p) => ({
+                      ...p,
+                      edited: { ...p.edited, [tone]: e.target.value },
+                    }))
+                  }
+                  rows={Math.max(4, Math.min(12, filled.split("\n").length + 3))}
+                  aria-label="Edit your message"
+                  className="scroll-editorial block w-full resize-y border border-ink/25 bg-creamDeep/40 p-4 font-display text-base leading-relaxed text-ink transition focus:border-ink focus:bg-cream focus:outline-none sm:text-lg"
+                />
+                {usesName && state.name.trim() === "" && editedForTone === null && (
+                  <p className="mt-2 text-xs leading-relaxed text-ink/55">
+                    Tip: add a name above and we&rsquo;ll fold it into the
+                    message automatically.
+                  </p>
+                )}
               </div>
 
               {/* Send options row */}
@@ -600,7 +664,7 @@ function SidekickReplyHelper({
           onChange={(e) => setClientReply(e.target.value)}
           placeholder="Paste their reply here&hellip;"
           rows={3}
-          className="input-editorial mt-2 w-full resize-y"
+          className="input-editorial scroll-editorial mt-2 w-full resize-y"
         />
       </label>
 

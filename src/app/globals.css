@@ -71,6 +71,35 @@
     @apply inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase
            tracking-[0.16em] text-ink transition hover:text-coral;
   }
+
+  /* Editorial scrollbar — slim, warm-neutral track + ink thumb. Applied to
+     resizable textareas (value-prop post, message editor) so the chrome
+     scrollbar doesn't read as foreign against the cream surfaces.
+     - Firefox uses scrollbar-width / scrollbar-color.
+     - WebKit (Chrome, Safari, Edge) uses ::-webkit-scrollbar pseudos. */
+  .scroll-editorial {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(19, 19, 19, 0.35) transparent;
+  }
+  .scroll-editorial::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-editorial::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-editorial::-webkit-scrollbar-thumb {
+    background-color: rgba(19, 19, 19, 0.25);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .scroll-editorial::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(19, 19, 19, 0.45);
+  }
+  .scroll-editorial::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 /* -------------------------------------------------------------------------

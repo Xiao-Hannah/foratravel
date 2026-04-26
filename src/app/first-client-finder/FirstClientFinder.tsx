@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePersistentState } from "@/lib/usePersistentState";
-import { Answers } from "./data";
+import { Answers, buildStarterPost } from "./data";
 import {
   EMPTY_CARD,
   SavedSession,
@@ -12,7 +12,9 @@ import {
 } from "./session";
 import Intro from "./Intro";
 import Quiz from "./Quiz";
+import ValueProp from "./ValueProp";
 import Results from "./Results";
+import Toast from "./Toast";
 
 export default function FirstClientFinder() {
   const [session, setSession, hydrated] = usePersistentState<SavedSession>(
@@ -20,60 +22,85 @@ export default function FirstClientFinder() {
     emptySession,
   );
 
-  // Stage is derived but allowed to override (e.g. user clicks "Start over").
+  // Stage is derived but allowed to override (e.g. user clicks "Start over",
+  // or returns to value-prop screen from results).
   const [stageOverride, setStageOverride] = useState<Stage | null>(null);
   const stage: Stage =
     stageOverride ??
     (session.answers ? "results" : hydrated ? "intro" : "intro");
 
-  // Quiz local state (only relevant during quiz stage)
-  const [quizStep, setQuizStep] = useState(0);
-  const [draft, setDraft] = useState<Partial<Answers>>({});
+  // Lightweight global toast for cross-stage actions (copy confirmations).
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   function startQuiz() {
-    setDraft({});
-    setQuizStep(0);
     setStageOverride("quiz");
   }
 
-  function completeQuiz(final: Answers) {
-    setSession({ answers: final, cards: {} });
-    setStageOverride("results");
+  function completeQuiz(answers: Answers) {
+    // Seed the post draft from the freshly built post so the value-prop
+    // screen always shows a personalized starting point. The advisor can
+    // edit (or reset) from there.
+    setSession((prev) => ({
+      ...prev,
+      answers,
+      postDraft: prev.postDraft ?? buildStarterPost(answers),
+    }));
+    setStageOverride("valueProp");
   }
 
   function reset() {
     setSession(emptySession);
-    setDraft({});
-    setQuizStep(0);
     setStageOverride("intro");
   }
 
   if (stage === "intro") {
-    return <Intro onStart={startQuiz} hasSavedSession={!!session.answers} />;
+    return (
+      <>
+        <Intro onStart={startQuiz} hasSavedSession={!!session.answers} />
+        {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+      </>
+    );
   }
 
   if (stage === "quiz") {
     return (
-      <Quiz
-        step={quizStep}
-        draft={draft}
-        onAnswer={(patch, isFinal) => {
-          const next = { ...draft, ...patch };
-          setDraft(next);
-          if (isFinal) {
-            completeQuiz(next as Answers);
-          } else {
-            setQuizStep((s) => s + 1);
+      <>
+        <Quiz
+          initial={session.answers ?? undefined}
+          onComplete={completeQuiz}
+          onBack={() => setStageOverride("intro")}
+        />
+        {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+      </>
+    );
+  }
+
+  if (stage === "valueProp") {
+    if (!session.answers) {
+      // Defensive fallback — shouldn't happen because completeQuiz sets
+      // answers before transitioning, but keeps types honest.
+      setStageOverride("quiz");
+      return null;
+    }
+    return (
+      <>
+        <ValueProp
+          answers={session.answers}
+          postDraft={session.postDraft}
+          onPostChange={(next) =>
+            setSession((prev) => ({ ...prev, postDraft: next }))
           }
-        }}
-        onBack={() => {
-          if (quizStep === 0) {
-            setStageOverride("intro");
-          } else {
-            setQuizStep((s) => s - 1);
-          }
-        }}
-      />
+          onContinue={() => setStageOverride("results")}
+          onBack={() => setStageOverride("quiz")}
+          onToast={setToast}
+        />
+        {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+      </>
     );
   }
 
@@ -82,6 +109,7 @@ export default function FirstClientFinder() {
     <Results
       answers={session.answers!}
       cards={session.cards}
+      postDraft={session.postDraft}
       onCardChange={(id, updater) =>
         setSession((prev) => {
           const current = prev.cards[id] ?? EMPTY_CARD;
@@ -91,6 +119,7 @@ export default function FirstClientFinder() {
           };
         })
       }
+      onBackToValueProp={() => setStageOverride("valueProp")}
       onReset={reset}
     />
   );
