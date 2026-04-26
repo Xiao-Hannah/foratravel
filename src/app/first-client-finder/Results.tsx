@@ -114,7 +114,7 @@ export default function Results({
           cards above (white surfaces on cream, smaller type). */}
       <section
         aria-labelledby="warmup-heading"
-        className="mt-14 border-t border-ink/15 pt-10"
+        className="border-ink/15 pt-10"
       >
         <p className="eyebrow">Or, ease in</p>
         <h2

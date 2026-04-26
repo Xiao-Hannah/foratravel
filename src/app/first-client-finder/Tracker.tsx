@@ -10,7 +10,7 @@ export default function Tracker({
   allSent: boolean;
 }) {
   return (
-    <div className="mt-12 border-t border-ink/15 pt-8">
+    <div className="mt-12 border-t pt-8">
       <div className="flex items-baseline justify-between">
         <p className="eyebrow">Progress</p>
         <p className="font-display text-2xl tracking-tightish text-ink">
