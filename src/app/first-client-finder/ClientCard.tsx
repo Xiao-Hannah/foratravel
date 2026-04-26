@@ -75,6 +75,30 @@ export default function ClientCard({
     );
   }, []);
 
+  // Email handoff is unreliable on macOS when the user doesn't use Mail.app
+  // (mailto: either silently fails or pops a system prompt to pick a default).
+  // Showing a small chooser — Default mail / Gmail / Outlook — lets users
+  // open their actual mail tool with the body pre-filled.
+  const [emailMenuOpen, setEmailMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!emailMenuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.closest("[data-email-menu]")) {
+        setEmailMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setEmailMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [emailMenuOpen]);
+
   function markInteracted() {
     onChange((p) => (p.interacted ? p : { ...p, interacted: true }));
   }
@@ -132,6 +156,31 @@ export default function ClientCard({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  async function handleEmailGmail() {
+    await copyToClipboard(filled);
+    markInteracted();
+    const subject = "Quick update from me";
+    // Gmail web compose URL — works on macOS/Windows for anyone signed into
+    // Gmail in the browser, no default-mail-app config required.
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(
+      subject,
+    )}&body=${encodeURIComponent(filled)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setEmailMenuOpen(false);
+  }
+
+  async function handleEmailOutlook() {
+    await copyToClipboard(filled);
+    markInteracted();
+    const subject = "Quick update from me";
+    // Outlook web compose — works for outlook.com / Microsoft 365 users.
+    const url = `https://outlook.live.com/mail/0/deeplink/compose?subject=${encodeURIComponent(
+      subject,
+    )}&body=${encodeURIComponent(filled)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setEmailMenuOpen(false);
   }
 
   async function handleInstagram() {
@@ -343,14 +392,56 @@ export default function ClientCard({
                   >
                     <span aria-hidden className="text-base">📱</span> Text
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleEmail}
-                    className="btn-send"
-                    aria-label="Open email client with message pre-filled"
-                  >
-                    <span aria-hidden className="text-base">✉️</span> Email
-                  </button>
+                  <div className="relative" data-email-menu>
+                    <button
+                      type="button"
+                      onClick={() => setEmailMenuOpen((v) => !v)}
+                      className="btn-send"
+                      aria-haspopup="menu"
+                      aria-expanded={emailMenuOpen}
+                      aria-label="Choose how to send by email"
+                    >
+                      <span aria-hidden className="text-base">✉️</span> Email
+                      <span aria-hidden className="ml-1 text-xs opacity-60">▾</span>
+                    </button>
+                    {emailMenuOpen && (
+                      <div
+                        role="menu"
+                        className="absolute left-0 top-full z-20 mt-1 w-56 border border-ink/20 bg-cream shadow-lg"
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setEmailMenuOpen(false);
+                            void handleEmail();
+                          }}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-creamDeep/60"
+                        >
+                          Default mail app
+                          <span className="block text-xs text-taupe">
+                            Apple Mail, Outlook desktop…
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={handleEmailGmail}
+                          className="block w-full border-t border-ink/10 px-3 py-2 text-left text-sm hover:bg-creamDeep/60"
+                        >
+                          Gmail (web)
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={handleEmailOutlook}
+                          className="block w-full border-t border-ink/10 px-3 py-2 text-left text-sm hover:bg-creamDeep/60"
+                        >
+                          Outlook (web)
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={handleInstagram}
