@@ -57,12 +57,13 @@ export default function FirstQuoteWalkthrough() {
     EMPTY_SESSION,
   );
   const [quote, setQuote] = useState<QuoteForm>(EMPTY_QUOTE);
-  // Tracks whether we've already copied the brief into the quote form on
-  // first entry into the build-quote step. Without this, the default
-  // `guests: 2` from EMPTY_QUOTE would always win against the brief value
-  // (because `2 || brief.guests === 2`) so the brief's guest count would
-  // silently never be applied.
-  const briefAppliedRef = useRef(false);
+  // Tracks the previous step so we can detect *transitions* into the
+  // build-quote step and pre-fill the form from the brief at that exact
+  // moment. A previous version used a one-way "have we applied?" ref,
+  // but that latch was set before the `undecided` guard and never reset
+  // on back-navigation, so brief data could silently fail to populate
+  // on a second visit to step 4.
+  const prevStepRef = useRef<number | null>(null);
 
   const hotel: Hotel | null =
     HOTELS.find((h) => h.id === session.hotelId) ?? null;
@@ -77,7 +78,7 @@ export default function FirstQuoteWalkthrough() {
   const reset = () => {
     setSession(EMPTY_SESSION);
     setQuote(EMPTY_QUOTE);
-    briefAppliedRef.current = false;
+    prevStepRef.current = null;
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -95,22 +96,33 @@ export default function FirstQuoteWalkthrough() {
     }
   }, [session.step, hotel, setSession]);
 
-  // Pre-fill the quote dates and guest count from the brief on first entry
-  // into the quote step, but never overwrite values the user has already
-  // typed. We use a ref so the copy happens exactly once per session \u2014
-  // otherwise navigating back-and-forth could re-overwrite user edits, and
-  // the default `guests: 2` would block the brief's value from ever being
-  // applied via `||`.
+  // Pre-fill the quote dates and guest count from the brief whenever the
+  // user *enters* the build-quote step (either via a step transition or
+  // via initial load landing directly on STEP_QUOTE from a persisted
+  // session). Existing typed values are preserved via `q.startDate || ...`
+  // so re-entry doesn't clobber edits. If the brief was skipped
+  // (`undecided`) we leave the form blank.
   useEffect(() => {
-    if (session.step !== STEP_QUOTE) return;
-    if (briefAppliedRef.current) return;
-    briefAppliedRef.current = true;
+    const prev = prevStepRef.current;
+    prevStepRef.current = session.step;
+
+    const enteringQuote =
+      session.step === STEP_QUOTE && prev !== STEP_QUOTE;
+    if (!enteringQuote) return;
     if (session.brief.undecided) return;
+
     setQuote((q) => ({
       ...q,
       startDate: q.startDate || session.brief.startDate || "",
       endDate: q.endDate || session.brief.endDate || "",
-      guests: session.brief.guests > 0 ? session.brief.guests : q.guests,
+      // Only overwrite the default-value guest count; if the user has
+      // explicitly changed it, keep their value.
+      guests:
+        q.guests !== EMPTY_QUOTE.guests
+          ? q.guests
+          : session.brief.guests > 0
+            ? session.brief.guests
+            : q.guests,
     }));
   }, [session.step, session.brief]);
 
