@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StartWalkthroughLink } from "./tools/first-quote-walkthrough/StartWalkthroughLink";
 
 type Tool = {
   slug: string;
@@ -20,13 +21,13 @@ const tools: Tool[] = [
     status: "live",
   },
   {
-    slug: "trip-pricing",
+    slug: "first-quote-walkthrough",
     number: "02",
-    name: "Trip Pricing Helper",
-    tagline: "Estimate commission with confidence.",
+    name: "First Quote Walkthrough",
+    tagline: "From partner to send, in five steps.",
     description:
-      "Quickly estimate commission and trip value for a quote, before you send it.",
-    status: "soon",
+      "Walk through your very first quote — pick a preferred partner, build the numbers, and see what you'll earn before you hit send.",
+    status: "live",
   },
   {
     slug: "supplier-cheatsheet",
@@ -92,7 +93,7 @@ export default function HomePage() {
           The toolkit
         </h2>
         <p className="hidden text-xs uppercase tracking-[0.16em] text-ink/55 sm:block">
-          {tools.length} tools · 1 live
+          {tools.length} tools · 2 live
         </p>
       </div>
       <div className="mt-6 rule" />
@@ -142,9 +143,15 @@ export default function HomePage() {
           return (
             <li key={tool.slug}>
               {tool.status === "live" ? (
-                <Link href={`/tools/${tool.slug}`} className="block">
-                  {inner}
-                </Link>
+                tool.slug === "first-quote-walkthrough" ? (
+                  <StartWalkthroughLink className="block">
+                    {inner}
+                  </StartWalkthroughLink>
+                ) : (
+                  <Link href={`/tools/${tool.slug}`} className="block">
+                    {inner}
+                  </Link>
+                )
               ) : (
                 inner
               )}

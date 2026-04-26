@@ -56,7 +56,7 @@ function SiteHeader() {
             All tools
           </Link>
           <a
-            href="https://www.foratravel.com/join/advisor-onboarding"
+            href="https://www.foratravel.com"
             target="_blank"
             rel="noreferrer"
             className="transition hover:text-ink"
