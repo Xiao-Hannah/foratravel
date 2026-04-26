@@ -1,10 +1,10 @@
 import Link from "next/link";
-import FirstClientFinder from "./FirstClientFinder";
+import OutreachLog from "../OutreachLog";
 
 export const metadata = {
-  title: "First Client Finder · Fora Tools",
+  title: "Outreach Log · First Client Finder · Fora Tools",
   description:
-    "Identify your first 3 potential clients and send a personalized outreach message in minutes.",
+    "Track the contacts you've reached out to from First Client Finder — replies, bookings, and follow-ups, all on this device.",
 };
 
 export default function Page() {
@@ -12,19 +12,14 @@ export default function Page() {
     <main className="mx-auto max-w-2xl px-5 pb-24 pt-10 sm:pt-14">
       <nav className="mb-10 flex items-center justify-between text-xs uppercase tracking-[0.16em] text-ink/55">
         <Link
-          href="/"
+          href="/first-client-finder"
           className="inline-flex items-center gap-2 transition hover:text-ink"
         >
-          <span aria-hidden>←</span> All tools
+          <span aria-hidden>←</span> Finder
         </Link>
-        <Link
-          href="/first-client-finder/log"
-          className="transition hover:text-ink"
-        >
-          Outreach log
-        </Link>
+        <span>Tool 01 · Log</span>
       </nav>
-      <FirstClientFinder />
+      <OutreachLog />
     </main>
   );
 }
