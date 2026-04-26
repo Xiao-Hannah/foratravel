@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { StartWalkthroughLink } from "./tools/first-quote-walkthrough/StartWalkthroughLink";
+import { StartWalkthroughLink } from "./first-quote-walkthrough/StartWalkthroughLink";
 
 type Tool = {
   slug: string;
@@ -57,7 +57,7 @@ export default function HomePage() {
             one and go. Most of them take less than five minutes.
           </p>
           <div className="mt-8 flex items-center gap-3">
-            <Link href="/tools/first-client-finder" className="btn-primary">
+            <Link href="/first-client-finder" className="btn-primary">
               Start with tool 01
             </Link>
             <a
@@ -148,7 +148,7 @@ export default function HomePage() {
                     {inner}
                   </StartWalkthroughLink>
                 ) : (
-                  <Link href={`/tools/${tool.slug}`} className="block">
+                  <Link href={`/${tool.slug}`} className="block">
                     {inner}
                   </Link>
                 )

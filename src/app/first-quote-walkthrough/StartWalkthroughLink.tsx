@@ -17,7 +17,7 @@ type Props = {
 export function StartWalkthroughLink({ children, className }: Props) {
   return (
     <Link
-      href="/tools/first-quote-walkthrough"
+      href="/first-quote-walkthrough"
       className={className}
       onClick={() => {
         try {
