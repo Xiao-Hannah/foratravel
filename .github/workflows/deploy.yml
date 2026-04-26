@@ -22,7 +22,7 @@ jobs:
     env:
       # Sub-path under xiao-hannah.github.io. Must match the repo name
       # (or be "" if you ever publish from a <user>.github.io repo).
-      BASE_PATH: /fora
+      BASE_PATH: /foratravel
     steps:
       - uses: actions/checkout@v4
 
