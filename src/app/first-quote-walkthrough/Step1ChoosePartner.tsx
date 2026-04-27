@@ -100,14 +100,28 @@ export function Step1ChoosePartner({
   const who = clientName?.trim() || "your client";
   const dest = brief.destination?.trim();
   const reserveCountVisible = sorted.filter((h) => h.isReserve).length;
+  // Pick a real Reserve property to recommend by name. Prefer one whose
+  // location matches the destination (case-insensitive substring); fall
+  // back to the first visible Reserve, then to Maison de Luxe.
+  const recommendedReserve =
+    (dest
+      ? sorted.find(
+          (h) =>
+            h.isReserve &&
+            h.location.toLowerCase().includes(dest.toLowerCase()),
+        )
+      : undefined) ??
+    sorted.find((h) => h.isReserve) ??
+    HOTELS.find((h) => h.id === "maison-de-luxe");
+  const recName = recommendedReserve?.name ?? "Maison de Luxe";
   const bannerText = (() => {
     if (reserveCountVisible === 0) {
       return `Based on ${who}${dest ? `'s ${dest} trip` : "'s preferences"}, here are the strongest matches — sort by Highest commission to see your best earners.`;
     }
     if (dest) {
-      return `Based on ${who}'s ${dest} trip, we recommend Fora Reserve properties — they offer exclusive perks and earn you the highest commission.`;
+      return `Based on ${who}'s ${dest} trip, we recommend ${recName} — they offer exclusive perks and earn you the highest commission.`;
     }
-    return `Based on ${who}'s preferences, we recommend Fora Reserve properties — they offer exclusive client perks and earn you the highest commission.`;
+    return `Based on ${who}'s preferences, we recommend ${recName} — they offer exclusive client perks and earn you the highest commission.`;
   })();
 
   function toggleCompareSelect(id: string) {
@@ -126,11 +140,6 @@ export function Step1ChoosePartner({
     } else {
       setDrawerSeed(undefined);
     }
-    setDrawerOpen(true);
-  }
-
-  function openDrawerFromBanner() {
-    setDrawerSeed(undefined);
     setDrawerOpen(true);
   }
 
@@ -217,20 +226,11 @@ export function Step1ChoosePartner({
           >
             <X size={14} />
           </button>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-            <div className="flex gap-2 items-start text-sm text-ink/90 flex-1">
-              <span aria-hidden className="text-base leading-none mt-0.5">
-                ✨
-              </span>
-              <p className="leading-relaxed">{bannerText}</p>
-            </div>
-            <button
-              type="button"
-              onClick={openDrawerFromBanner}
-              className="shrink-0 text-xs font-semibold text-brown hover:text-brownHover transition-colors self-start sm:self-auto"
-            >
-              Ask Sidekick →
-            </button>
+          <div className="flex gap-2 items-start text-sm text-ink/90">
+            <span aria-hidden className="text-base leading-none mt-0.5">
+              ✨
+            </span>
+            <p className="leading-relaxed">{bannerText}</p>
           </div>
         </div>
       )}

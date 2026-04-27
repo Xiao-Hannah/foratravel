@@ -34,6 +34,24 @@ module.exports = {
         tipBg: "#F0EDE8",
         sidekickBg: "#F5F5F5",
         success: "#2ECC71",      // selected / check
+
+        // First 60 Days dashboard — status banner palettes (green/amber/red).
+        // Soft, editorial tints meant to sit calmly on cream backgrounds.
+        statusGreenBg:     "#EAF3DE",
+        statusGreenBorder: "#97C459",
+        statusGreenText:   "#3B6D11",
+        statusGreenInk:    "#27500A",
+        statusGreenChip:   "#C0DD97",
+        statusAmberBg:     "#FAEEDA",
+        statusAmberBorder: "#EF9F27",
+        statusAmberText:   "#854F0B",
+        statusAmberInk:    "#633806",
+        statusAmberChip:   "#FAC775",
+        statusRedBg:       "#FCEBEB",
+        statusRedBorder:   "#F09595",
+        statusRedText:     "#A32D2D",
+        statusRedInk:      "#791F1F",
+        statusRedChip:     "#F7C1C1",
       },
       fontFamily: {
         // Fraunces stands in for Fora's proprietary Chiswick serif.

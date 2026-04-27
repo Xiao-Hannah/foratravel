@@ -248,6 +248,7 @@ export default function FirstQuoteWalkthrough() {
                 endDate={quote.endDate}
                 guests={quote.guests}
                 markup={quote.markup}
+                brief={session.brief}
               />
             )}
 

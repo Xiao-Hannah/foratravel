@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { Check } from "lucide-react";
 import {
+  type ClientBrief,
   type Hotel,
+  HOTELS,
   calcBasePrice,
   calcEarnings,
   fmtDate,
   fmtMoney,
   nightsBetween,
 } from "./data";
+import { SidekickDrawer } from "./SidekickDrawer";
 
 type Props = {
   hotel: Hotel;
@@ -17,6 +21,8 @@ type Props = {
   endDate: string;
   guests: number;
   markup: number;
+  /** Client brief from the parent — passed through to Sidekick for context. */
+  brief: ClientBrief;
 };
 
 export function Step4ReviewSend({
@@ -26,16 +32,19 @@ export function Step4ReviewSend({
   endDate,
   guests,
   markup,
+  brief,
 }: Props) {
   const nights = nightsBetween(startDate, endDate);
   const basePrice = calcBasePrice(hotel, nights);
   const markupAmount = basePrice * (markup / 100);
   const total = basePrice + markupAmount;
   const earnings = calcEarnings(basePrice, hotel);
+  const [sidekickOpen, setSidekickOpen] = useState(false);
 
   return (
-    <div className="fade-up">
-      <h1 className="text-2xl font-bold mb-1">Review &amp; send</h1>
+    <>
+      <div className="fade-up">
+        <h1 className="text-2xl font-bold mb-1">Review &amp; send</h1>
       <p className="text-sm text-wtMuted mb-5">
         Take one last look before sending to your client.
       </p>
@@ -117,21 +126,34 @@ export function Step4ReviewSend({
         when this booking completes.
       </div>
 
-      {/* Sidekick */}
-      <div className="rounded-xl p-4 mt-5 bg-sidekickBg">
-        <p className="text-sm mb-3">
-          <span className="mr-1">✨</span>
-          First time sending a quote? Sidekick can help you know what to expect
-          when your client responds.
-        </p>
-        <button
-          type="button"
-          className="text-sm font-semibold px-4 py-2 rounded-md border border-brown text-brown bg-transparent hover:bg-brown/5 transition-colors"
-        >
-          Chat with Sidekick →
-        </button>
+        {/* Sidekick */}
+        <div className="rounded-xl p-4 mt-5 bg-sidekickBg">
+          <p className="text-sm mb-3">
+            <span className="mr-1">✨</span>
+            First time sending a quote? Sidekick can help you know what to
+            expect when your client responds.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSidekickOpen(true)}
+            className="text-sm font-semibold px-4 py-2 rounded-md border border-brown text-brown bg-transparent hover:bg-brown/5 transition-colors"
+          >
+            Chat with Sidekick →
+          </button>
+        </div>
       </div>
-    </div>
+      {/* Rendered as a sibling of `.fade-up` so the parent’s lingering
+          `transform: translateY(0)` (animation fill-mode: forwards) doesn’t
+          create a containing block for this `position: fixed` drawer. */}
+      <SidekickDrawer
+        open={sidekickOpen}
+        onClose={() => setSidekickOpen(false)}
+        brief={brief}
+        clientName={clientName}
+        hotels={HOTELS}
+        seedQuery={`What should I expect after I send this quote to ${clientName || "my client"}?`}
+      />
+    </>
   );
 }
 
